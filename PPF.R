@@ -19,11 +19,10 @@ for (p in PKG) {
 }
 rm(p,PKG)
 
-## Loading data (all locations at 8.185 km2 per cell)
-# df<-read_csv("OWEP LCOE NPV & fishing PV data V2 DO NOT DISTRIBUTE.csv")
-# df<-df %>%
-#   dplyr::select(OWEP_ID,Total_fish_USD,LCOE_kWh,State,MWhyraw,Gridcell_area_m2)
-df<-read_csv("OWEP output & fishing PV data V4 DO NOT DISTRIBUTE.csv")
+options(scipen=999) # Prevent scientific notation
+
+## Loading data
+df<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
 df<-df %>%
   dplyr::select(`Wind farm grid ID`,`Wind farm state`,`OWEP grid cells (n)`,Total_fish_USD,`Weighted mean LCOE`,`Total MWhyraw`,`Wind farm area (m2)`)
 
@@ -121,7 +120,7 @@ agree$Var1<-as.numeric(levels(agree$Var1))[agree$Var1] # https://stackoverflow.c
 agree$prob<-agree$Freq/sum(agree$Freq)
 
 # Fisheries exposure at pareto selected sites (sampling approach, sample n from agreement matrix weighted by how often they are selected and calculate an expected value)
-dft<-read_csv("OWEP output & fishing PV data V4 DO NOT DISTRIBUTE.csv")
+dft<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
 dft<-dft %>% dplyr::select(`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD)
 dft<-as.data.frame(dft)
 
@@ -334,9 +333,18 @@ agree$Var1<-as.numeric(levels(agree$Var1))[agree$Var1] # https://stackoverflow.c
 agree$prob<-agree$Freq/sum(agree$Freq)
 
 # Fisheries exposure at pareto selected sites (sampling approach, sample n from agreement matrix weighted by how often they are selected and calculate an expected value)
-dft<-read_csv("OWEP output & fishing PV data V4 DO NOT DISTRIBUTE.csv")
-dft<-dft %>% dplyr::select(`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD)
+dft<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
 dft<-as.data.frame(dft)
+#t<-merge(agree,dft,by.x = "Var1",by.y = "Wind farm grid ID") # Visually inspecting the conditions of agreement sites
+#t<-t %>% filter(`At-sea_hake_USD`>0)
+# ggplot() + 
+#   geom_point(data = dft %>% drop_na() %>% filter(`At-sea_hake_USD`>0),aes(x = `At-sea_hake_USD`/1000000, y = `Mean LCOE_kWh`*1000)) +
+#   xlim(c(0,300)) + ylim(c(0,200))
+# ggplot() + 
+#   geom_point(data = dft %>% drop_na() %>% filter(`Shore_hake_USD`>0),aes(x = `Shore_hake_USD`/1000000, y = `Mean LCOE_kWh`*1000)) +
+#   xlim(c(0,300)) + ylim(c(0,200))
+dft<-dft %>% dplyr::select(`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD)
+
 
 m<-10000 # Higher than for 2030 because there are more potential sites in 2045 (119 sites are observed across pareto sets)
 bigfish<-data.frame("Dungeness_USD"=rep(NA,m),"At-sea_hake_USD"=rep(NA,m),"Shore_hake_USD"=rep(NA,m),"Market_squid_USD"=rep(NA,m),"Pink_shrimp_USD"=rep(NA,m),"Albacore_USD"=rep(NA,m),"Chinook_USD"=rep(NA,m),"Sablefish_USD"=rep(NA,m),"Spiny_lobster_USD"=rep(NA,m),"Sites"=rep(NA,m))
@@ -506,7 +514,7 @@ bigfish30perc / bigfish45perc + plot_annotation(tag_levels = 'A')
 
 
 ## Scatterplot and table of LCOE per fishery
-df<-read_csv("OWEP output & fishing PV data V4 DO NOT DISTRIBUTE.csv")
+df<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
 df<-df %>% drop_na(`Mean LCOE_kWh`)
 df<-df[df$`OWEP grid cells (n)`>34,]
 df$Total_fish_USD<-NULL
@@ -528,13 +536,13 @@ df$fishery<-factor(df$fishery, levels = sorted_fish)
 
 ggplot() + 
   #geom_point(data = df,aes(x = PV, y = LCOE_MWh, color = fishery)) + # Scatterplot of fisheries PV and LCOE is too jumbled with extreme values
-  geom_boxplot(data = df, aes(y = fishery, x = LCOE_MWh),outlier.shape = NA) +
+  geom_boxplot(data = df, aes(y = fishery, x = LCOE_MWh)) +
   #labs(x = "Sum fishing PV ($Mil)", y = "Mean LCOE ($/MWh)", color = "Fishery") +
   labs(y="",x = "LCOE ($/MWh)") +
   theme_minimal()
 
 ## Wind results
-df<-read_csv("OWEP LCOE NPV & fishing PV data V2 DO NOT DISTRIBUTE.csv")
+df<-read_csv("OWEP LCOE NPV & fishing PV data V5 DO NOT DISTRIBUTE.csv")
 df<-df[df$LCOE_kWh>0,] %>% drop_na(LCOE_kWh)
 df$LCOE_MWh<-df$LCOE_kWh*1000
 df$LCOE_kWh<-NULL
@@ -543,6 +551,18 @@ df %>% group_by(State) %>%
   summarise(mean = mean(LCOE_MWh), std = sd(LCOE_MWh))
 
 ## Region replicated across many targets
+# Loading data
+df<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
+df<-df %>%
+  dplyr::select(`Wind farm grid ID`,`Wind farm state`,`OWEP grid cells (n)`,Total_fish_USD,`Weighted mean LCOE`,`Total MWhyraw`,`Wind farm area (m2)`)
+df<-df %>% drop_na(`Weighted mean LCOE`)
+df<-df[df$`OWEP grid cells (n)`>34,] # Choosing 34 as a cutoff for what could be considered full cells, could amend
+df$Total_fish_USD<-df$Total_fish_USD/1000000
+df$LCOE_MWh<-df$`Weighted mean LCOE`*1000
+df$`Weighted mean LCOE`<-NULL
+df$`Wind farm area (m2)`<-NULL # This isn't a correct calculation, this is actually cell size
+df<-as.data.frame(df)
+
 replifish<-function(n,pops){
   transform_vector_to_exact_ones <- function(v, num_ones) { # Sets constraint by forcing the NSGA2 draws to generate exactly n ones and (D - n) zeros
     # Length of the input vector
@@ -607,53 +627,76 @@ replifish<-function(n,pops){
     rowwise() %>%
     mutate(across(everything(), ~df$`Wind farm grid ID`[.x])) %>%
     ungroup()
-  agree<-as.data.frame(table(as.matrix(selected_wfgridID)))
-  agree$Var1<-as.numeric(levels(agree$Var1))[agree$Var1] # https://stackoverflow.com/questions/3418128/how-to-convert-a-factor-to-integer-numeric-without-loss-of-information
-  agree$prob<-agree$Freq/sum(agree$Freq)
+  # agree<-as.data.frame(table(as.matrix(selected_wfgridID)))
+  # agree$Var1<-as.numeric(levels(agree$Var1))[agree$Var1] # https://stackoverflow.com/questions/3418128/how-to-convert-a-factor-to-integer-numeric-without-loss-of-information
+  # agree$prob<-agree$Freq/sum(agree$Freq)
+  # agree$n<-n
+  # agree<-mutate(agree, LCOEMWh = df$LCOE_MWh[match(agree$Var1,df$`Wind farm grid ID`)])
+  # agree<-mutate(agree, FishPV = df$Total_fish_USD[match(agree$Var1,df$`Wind farm grid ID`)])
+  selected_wfgridID$id<-seq(1,nrow(selected_wfgridID),1)
+  selected_wfgridID<-pivot_longer(data = selected_wfgridID,cols = !id,values_to = "Wind farm grid ID") %>% dplyr::select(!name)
   
   # Fisheries exposure at pareto selected sites (sampling approach, sample n from agreement matrix weighted by how often they are selected and calculate an expected value)
-  dft<-read_csv("OWEP output & fishing PV data V4 DO NOT DISTRIBUTE.csv")
+  dft<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
   dft<-dft %>% dplyr::select(`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD,`Weighted mean LCOE`)
   dft<-as.data.frame(dft)
   
-  m<-10000 # Highest value for expected values of n
-  bigfish<-data.frame("Dungeness_USD"=rep(NA,m),"At-sea_hake_USD"=rep(NA,m),"Shore_hake_USD"=rep(NA,m),"Market_squid_USD"=rep(NA,m),"Pink_shrimp_USD"=rep(NA,m),"Albacore_USD"=rep(NA,m),"Chinook_USD"=rep(NA,m),"Sablefish_USD"=rep(NA,m),"Spiny_lobster_USD"=rep(NA,m),"LCOEMWh"=rep(NA,m),"Sites"=rep(NA,m))
-  for(j in 1:m){ # Sums species PV for a drawn sample of size n and iterates across samples while tracking draws in "Sites" column
-    s_agree<-sample(agree$Var1,n,replace = FALSE,prob = agree$prob)
-    fishroll<-data.frame("Dungeness_USD"=rep(NA,n),"At-sea_hake_USD"=rep(NA,n),"Shore_hake_USD"=rep(NA,n),"Market_squid_USD"=rep(NA,n),"Pink_shrimp_USD"=rep(NA,n),"Albacore_USD"=rep(NA,n),"Chinook_USD"=rep(NA,n),"Sablefish_USD"=rep(NA,n),"Spiny_lobster_USD"=rep(NA,n),"Weighted mean LCOE"=rep(NA,n))
-    for(i in 1:n){ # Identifies species PV from a given weighted sample of size n drawn from agreement vector
-      fishroll[i,]<-dft[dft$`Wind farm grid ID`==s_agree[i],2:11]
-    }
-    LCOEMWh<-as.data.frame(mean(fishroll$Weighted.mean.LCOE)*1000)
-    fishroll$Weighted.mean.LCOE<-NULL
-    fishroll<-as.data.frame(t(colSums(fishroll))) #paste(s_agree, collapse = " ")
-    fishroll<-cbind(fishroll,LCOEMWh,paste(s_agree, collapse = " "))
-    names(fishroll)[names(fishroll) == 'paste(s_agree, collapse = " ")']<-"Sites"
-    names(fishroll)[names(fishroll) == 'mean(fishroll$Weighted.mean.LCOE) * 1000']<-"LCOEMWh"
-    bigfish[j,]<-fishroll
-  }
+  selected_wfgridID<-merge(selected_wfgridID,dft,by="Wind farm grid ID")
+  LCOEMWh<-mean(selected_wfgridID$`Weighted mean LCOE`)*1000
+  selected_wfgridID$`Weighted mean LCOE`<-NULL
+  selected_wfgridID<-selected_wfgridID %>% dplyr::select(!"Wind farm grid ID") %>% group_by(id) %>%
+    summarise(across(everything(), list(sum),.names = "sum_{.col}"))
+  selected_wfgridID<-selected_wfgridID %>% dplyr::select(!id) %>% 
+    summarise(across(everything(), list(mean),.names = "mean_{.col}"))
+  bigfish<-selected_wfgridID %>% pivot_longer(cols = everything(),names_to = "Fishery",values_to = "PV", names_prefix = "mean_sum_")
   
-  LCOEMWh<-mean(bigfish$LCOEMWh)
-  bigfish$LCOEMWh<-NULL
-  bigfish<-bigfish %>% pivot_longer(cols = !Sites,names_to = "Fishery",values_to = "PV")
-  bigfish$Fishery<-gsub("_USD$", "",bigfish$Fishery)
-  bigfish$Fishery<-gsub("_", " ",bigfish$Fishery)
-  bigfish$Fishery<-gsub("\\.", "-",bigfish$Fishery)
   
-  bigfish<-bigfish %>% group_by(Fishery) %>% 
-    summarise(meanfishPV = mean(PV))
+  # m<-15000 # Highest value for expected values of n
+  # bigfish<-data.frame("Dungeness_USD"=rep(NA,m),"At-sea_hake_USD"=rep(NA,m),"Shore_hake_USD"=rep(NA,m),"Market_squid_USD"=rep(NA,m),"Pink_shrimp_USD"=rep(NA,m),"Albacore_USD"=rep(NA,m),"Chinook_USD"=rep(NA,m),"Sablefish_USD"=rep(NA,m),"Spiny_lobster_USD"=rep(NA,m),"LCOEMWh"=rep(NA,m),"Sites"=rep(NA,m))
+  # for(j in 1:m){ # Sums species PV for a drawn sample of size n and iterates across samples while tracking draws in "Sites" column
+  #   s_agree<-sample(agree$Var1,n,replace = FALSE,prob = agree$prob)
+  #   fishroll<-data.frame("Dungeness_USD"=rep(NA,n),"At-sea_hake_USD"=rep(NA,n),"Shore_hake_USD"=rep(NA,n),"Market_squid_USD"=rep(NA,n),"Pink_shrimp_USD"=rep(NA,n),"Albacore_USD"=rep(NA,n),"Chinook_USD"=rep(NA,n),"Sablefish_USD"=rep(NA,n),"Spiny_lobster_USD"=rep(NA,n),"Weighted mean LCOE"=rep(NA,n))
+  #   for(i in 1:n){ # Identifies species PV from a given weighted sample of size n drawn from agreement vector
+  #     fishroll[i,]<-dft[dft$`Wind farm grid ID`==s_agree[i],2:11]
+  #   }
+  #   LCOEMWh<-as.data.frame(mean(fishroll$Weighted.mean.LCOE)*1000)
+  #   fishroll$Weighted.mean.LCOE<-NULL
+  #   fishroll<-as.data.frame(t(colSums(fishroll))) #paste(s_agree, collapse = " ")
+  #   fishroll<-cbind(fishroll,LCOEMWh,paste(s_agree, collapse = " "))
+  #   names(fishroll)[names(fishroll) == 'paste(s_agree, collapse = " ")']<-"Sites"
+  #   names(fishroll)[names(fishroll) == 'mean(fishroll$Weighted.mean.LCOE) * 1000']<-"LCOEMWh"
+  #   bigfish[j,]<-fishroll
+  # }
+  # 
+  # LCOEMWh<-mean(bigfish$LCOEMWh)
+  # bigfish$LCOEMWh<-NULL
+  # bigfish<-bigfish %>% pivot_longer(cols = !Sites,names_to = "Fishery",values_to = "PV")
+  # bigfish$Fishery<-gsub("_USD$", "",bigfish$Fishery)
+  # bigfish$Fishery<-gsub("_", " ",bigfish$Fishery)
+  # bigfish$Fishery<-gsub("\\.", "-",bigfish$Fishery)
+  # 
+  # bigfish<-bigfish %>% group_by(Fishery) %>% 
+  #   summarise(meanfishPV = mean(PV))
   
   bigfish$n<-n
   bigfish$LCOEMWh<-LCOEMWh
   bigfish$dupes<-dupes
   
-  return(bigfish)
+  #return(list(bigfish = bigfish,agree = agree))
+  return(list(bigfish = bigfish))
 }
 
-ns<-c(seq(1,65,1))
-pop<-rep(200,length(ns))
+ns<-c(seq(1,60,1))
+pop<-rep(500,length(ns))
 
-system.time(biggerfish<-map2_dfr(ns,pop,replifish))
+system.time(biggerfish<-map2(ns,pop,replifish))
+cagree<-map(biggerfish, pluck, "agree") %>% bind_rows()
+biggerfish<-map(biggerfish, pluck, "bigfish") %>% bind_rows()
+
+
+biggerfish %>% group_by(n) %>% 
+  summarise(sumn = sum(meanfishPV), mlcoe = mean(LCOEMWh)) %>% 
+  print(n = 100)
 
 palette <- brewer.pal(n = length(unique(biggerfish$Fishery)), name = "Paired")
 
@@ -669,9 +712,9 @@ ggplot(data = biggerfish, aes(x=n*.9, y=meanfishPV/1000000, group=Fishery)) + # 
   labs(x = "Target (GW)", y = "Mean present value ($Mil)", colour = "Fishery")
 
 ggplot(data = biggerfish, aes(x=n*.9, y=LCOEMWh)) + # LCOE expected impact across targets, weird artifacts from lots of pareto sites with high LCOE (TRY MEDIAN)
-  geom_line(size = 1)
+  geom_line(linewidth = 1)
 
-dft<-read_csv("OWEP output & fishing PV data V4 DO NOT DISTRIBUTE.csv")
+dft<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
 dft<-dft %>% dplyr::select(`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD,`Weighted mean LCOE`)
 dft<-as.data.frame(dft)
 fishsum<-dft %>% pivot_longer(cols = !`Wind farm grid ID`,names_to = "Fishery",values_to = "PV") %>% 
@@ -686,11 +729,11 @@ biggerfish<-merge(biggerfish,fishsum,by="Fishery")
 biggerfish$PVperc<-biggerfish$meanfishPV/biggerfish$fishsum
 
 ggplot(data = biggerfish, aes(x=n*.9, y=PVperc*100, group=Fishery)) + # Percent expected impact across targets
-  geom_line(aes(colour = Fishery), size = 1) +
+  geom_line(aes(colour = Fishery), linewidth = 1) +
   #geom_point() + 
-  geom_vline(xintercept = 11, linetype = "dashed", color = "grey50", size = 1) +
+  geom_vline(xintercept = 11, linetype = "dashed", color = "grey50", linewidth = 1) +
   geom_label(aes(x = 11, y = min(PVperc*100) - diff(range(PVperc*100)) * 0.05, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
-  geom_vline(xintercept = 55, linetype = "dashed", color = "grey50", size = 1) +
+  geom_vline(xintercept = 55, linetype = "dashed", color = "grey50", linewidth = 1) +
   geom_label(aes(x = 55, y = min(PVperc*100) - diff(range(PVperc*100)) * 0.05, label = "2045 Target"), fill = "white", color = "black") + 
   scale_colour_manual(values = palette) +
   theme_minimal() + 
