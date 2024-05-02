@@ -642,6 +642,7 @@ replifish<-function(n,pops){
   dft<-as.data.frame(dft)
   
   selected_wfgridID<-merge(selected_wfgridID,dft,by="Wind farm grid ID")
+  selected_wfgridID<-unique(selected_wfgridID) # Issue with the duplicate pareto sets command above when n = 1, this catches it
   LCOEMWh<-mean(selected_wfgridID$`Weighted mean LCOE`)*1000
   selected_wfgridID$`Weighted mean LCOE`<-NULL
   selected_wfgridID<-selected_wfgridID %>% dplyr::select(!"Wind farm grid ID") %>% group_by(id) %>%
@@ -679,6 +680,7 @@ replifish<-function(n,pops){
   #   summarise(meanfishPV = mean(PV))
   
   bigfish$n<-n
+  bigfish$PV<-ifelse(bigfish$n==1,bigfish$PV/9,bigfish$PV) # Handles formatting issue with n == 1
   bigfish$LCOEMWh<-LCOEMWh
   bigfish$dupes<-dupes
   
@@ -689,9 +691,10 @@ replifish<-function(n,pops){
 ns<-c(seq(1,60,1))
 pop<-rep(500,length(ns))
 
-system.time(biggerfish<-map2(ns,pop,replifish))
-cagree<-map(biggerfish, pluck, "agree") %>% bind_rows()
-biggerfish<-map(biggerfish, pluck, "bigfish") %>% bind_rows()
+system.time(biggerfish<-map2_dfr(ns,pop,replifish))
+# system.time(biggerfish<-map2(ns,pop,replifish))
+# cagree<-map(biggerfish, pluck, "agree") %>% bind_rows()
+# biggerfish<-map(biggerfish, pluck, "bigfish") %>% bind_rows()
 
 
 biggerfish %>% group_by(n) %>% 
