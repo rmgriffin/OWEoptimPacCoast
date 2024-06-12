@@ -232,7 +232,7 @@ CA<-ggplot() +
   theme_minimal() +
   #labs(x = "Sum fishing PV ($Mil)", y = "Mean LCOE ($/MWh)") +
   theme(legend.title = element_blank(),legend.position="none") +
-  coord_cartesian(xlim = c(0, 80))
+  coord_cartesian(xlim = c(0, 15))
 
 # OR ---
 df<-df2[df2$`Wind farm state`=="OR",]
@@ -503,9 +503,27 @@ WA45<-ggplot() +
 # Grouping PPF and agreement plots
 #region + CA + OR + WA
 
-region45 + CA45 + OR45 + WA45 + plot_annotation(tag_levels = 'A')
+region<-region + labs(x="Sum fishing present value exposure ($ Mil)") # Relabeling x axis
+region45<-region45 + labs(x="Sum fishing present value exposure ($ Mil)")
+CA<-CA + labs(x="Sum fishing present value exposure ($ Mil)") + coord_cartesian(xlim = c(0, 8))
+CA45<-CA45 + labs(x="Sum fishing present value exposure ($ Mil)")
+WA<-WA + labs(x="Sum fishing present value exposure ($ Mil)")
+WA45<-WA45 + labs(x="Sum fishing present value exposure ($ Mil)")
+OR<-OR + labs(x="Sum fishing present value exposure ($ Mil)")
+OR45<-OR45 + labs(x="Sum fishing present value exposure ($ Mil)")
 
-(region + region45) / (CA + OR + WA) + plot_annotation(tag_levels = 'A')
+#region + region + region45 + CA45 + OR45 + WA45 + plot_annotation(tag_levels = 'A') + plot_layout(axis_titles = "collect")
+#region + region45 + CA45 + OR45 + WA45 + plot_annotation(tag_levels = 'A') + plot_layout(axis_titles = "collect")
+#region + region45 + CA + OR + WA + plot_annotation(tag_levels = 'A') + plot_layout(axis_titles = "collect", design = "AAABBB\nCCDDEE")
+
+a1<-region + region45 + plot_layout(axis_titles = "collect")
+a2<-CA + OR + WA + plot_layout(axis_titles = "collect")
+a1 / a2 + plot_annotation(tag_levels = list(c("A","B","C","D","E")))
+
+region45 + CA45 + OR45 + WA45 + plot_annotation(tag_levels = 'A') + plot_layout(axis_titles = "collect")
+
+#region + region + region45 + CA + OR + WA + plot_annotation(tag_levels = 'A') + plot_layout(axis_titles = "collect")
+#(region + region45) / (CA + OR + WA) + plot_annotation(tag_levels = 'A') + plot_layout(axis_titles = "collect")
 
 bigfish30 / bigfish45 + plot_annotation(tag_levels = 'A')
 
@@ -536,9 +554,9 @@ df$fishery<-factor(df$fishery, levels = sorted_fish)
 
 ggplot() + 
   #geom_point(data = df,aes(x = PV, y = LCOE_MWh, color = fishery)) + # Scatterplot of fisheries PV and LCOE is too jumbled with extreme values
-  geom_boxplot(data = df, aes(y = fishery, x = LCOE_MWh)) +
+  geom_boxplot(data = df, aes(y = fishery, x = LCOE_MWh),outlier.shape = NA) +
   #labs(x = "Sum fishing PV ($Mil)", y = "Mean LCOE ($/MWh)", color = "Fishery") +
-  labs(y="",x = "LCOE ($/MWh)") +
+  labs(y="",x = "LCOE ($/MWh)") + xlim(c(50,500)) +
   theme_minimal()
 
 ## Wind results
@@ -688,34 +706,20 @@ replifish<-function(n,pops){
   return(list(bigfish = bigfish))
 }
 
-ns<-c(seq(1,60,1))
-pop<-rep(500,length(ns))
+ns<-c(seq(2,62,10))
+pop<-rep(1000,length(ns))
 
 system.time(biggerfish<-map2_dfr(ns,pop,replifish))
 # system.time(biggerfish<-map2(ns,pop,replifish))
 # cagree<-map(biggerfish, pluck, "agree") %>% bind_rows()
 # biggerfish<-map(biggerfish, pluck, "bigfish") %>% bind_rows()
-
+biggerfish<-biggerfish$bigfish
 
 biggerfish %>% group_by(n) %>% 
-  summarise(sumn = sum(meanfishPV), mlcoe = mean(LCOEMWh)) %>% 
+  summarise(sumn = sum(PV), mlcoe = mean(LCOEMWh)) %>% 
   print(n = 100)
 
 palette <- brewer.pal(n = length(unique(biggerfish$Fishery)), name = "Paired")
-
-ggplot(data = biggerfish, aes(x=n*.9, y=meanfishPV/1000000, group=Fishery)) + # Nominal expected impact across targets
-  geom_line(aes(colour = Fishery), size = 1) +
-  #geom_point() + 
-  geom_vline(xintercept = 11, linetype = "dashed", color = "grey50", size = 1) +
-  geom_label(aes(x = 11, y = min(meanfishPV)/1000000 - diff(range(meanfishPV)) * 0.05/1000000, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
-  geom_vline(xintercept = 55, linetype = "dashed", color = "grey50", size = 1) +
-  geom_label(aes(x = 55, y = min(meanfishPV)/1000000 - diff(range(meanfishPV)) * 0.05/1000000, label = "2045 Target"), fill = "white", color = "black") + 
-  scale_colour_manual(values = palette) +
-  theme_minimal() + 
-  labs(x = "Target (GW)", y = "Mean present value ($Mil)", colour = "Fishery")
-
-ggplot(data = biggerfish, aes(x=n*.9, y=LCOEMWh)) + # LCOE expected impact across targets, weird artifacts from lots of pareto sites with high LCOE (TRY MEDIAN)
-  geom_line(linewidth = 1)
 
 dft<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
 dft<-dft %>% dplyr::select(`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD,`Weighted mean LCOE`)
@@ -728,19 +732,43 @@ fishsum$Fishery<-gsub("_USD$", "",fishsum$Fishery)
 fishsum$Fishery<-gsub("_", " ",fishsum$Fishery)
 fishsum$Fishery<-gsub("\\.", "-",fishsum$Fishery)
 
-biggerfish<-merge(biggerfish,fishsum,by="Fishery")
-biggerfish$PVperc<-biggerfish$meanfishPV/biggerfish$fishsum
+biggerfish$Fishery<-gsub("_USD$", "",biggerfish$Fishery)
+biggerfish$Fishery<-gsub("_", " ",biggerfish$Fishery)
+biggerfish$Fishery<-gsub("\\.", "-",biggerfish$Fishery)
 
-ggplot(data = biggerfish, aes(x=n*.9, y=PVperc*100, group=Fishery)) + # Percent expected impact across targets
+biggerfish<-merge(biggerfish,fishsum,by="Fishery")
+biggerfish$PVperc<-(biggerfish$PV/biggerfish$fishsum)*100
+
+bf_nom<-ggplot(data = biggerfish, aes(x=n*.9, y=PV/1000000, group=Fishery)) + # Nominal expected impact across targets
   geom_line(aes(colour = Fishery), linewidth = 1) +
   #geom_point() + 
   geom_vline(xintercept = 11, linetype = "dashed", color = "grey50", linewidth = 1) +
-  geom_label(aes(x = 11, y = min(PVperc*100) - diff(range(PVperc*100)) * 0.05, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_label(aes(x = 11, y = min(PV)/1000000 - diff(range(PV)) * 0.05/1000000, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
   geom_vline(xintercept = 55, linetype = "dashed", color = "grey50", linewidth = 1) +
-  geom_label(aes(x = 55, y = min(PVperc*100) - diff(range(PVperc*100)) * 0.05, label = "2045 Target"), fill = "white", color = "black") + 
+  geom_label(aes(x = 55, y = min(PV)/1000000 - diff(range(PV)) * 0.05/1000000, label = "2045 Target"), fill = "white", color = "black") + 
   scale_colour_manual(values = palette) +
   theme_minimal() + 
-  labs(x = "Target (GW)", y = "Percent", colour = "Fishery")
+  labs(x = "Target (GW)", y = "Mean present value ($Mil)", colour = "Fishery") +
+  xlim(c(0,60))
+
+l_nom<-ggplot(data = biggerfish, aes(x=n*.9, y=LCOEMWh)) + # LCOE expected impact across targets, weird artifacts from lots of pareto sites with high LCOE (TRY MEDIAN)
+  geom_line(linewidth = 1)
+
+bf_perc<-ggplot(data = biggerfish, aes(x=n*.9, y=PVperc, group=Fishery)) + # Percent expected impact across targets
+  geom_line(aes(colour = Fishery), linewidth = 1) +
+  #geom_point() + 
+  geom_vline(xintercept = 11, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 11, y = min(PVperc) - diff(range(PVperc)) * 0.05, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 55, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 55, y = min(PVperc) - diff(range(PVperc)) * 0.05, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Percent", colour = "Fishery") +
+  xlim(c(0,60))
+
+# Gathering figures
+bf_nom / bf_perc + plot_annotation(tag_levels = 'A') + plot_layout(guides = 'collect')
+bf_nom + bf_perc + plot_annotation(tag_levels = 'A') + plot_layout(guides = "collect")
 
 # ## Non-domiNULL# ## Non-dominated Sorting Genetic Algorithm II using a repair function and index based drawing
 # 
