@@ -766,9 +766,240 @@ bf_perc<-ggplot(data = biggerfish, aes(x=n*.9, y=PVperc, group=Fishery)) + # Per
   labs(x = "Target (GW)", y = "Percent", colour = "Fishery") +
   xlim(c(0,60))
 
-# Gathering figures
+## CA replicated across many targets
+# Loading data
+df<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
+df<-df %>%
+  dplyr::select(`Wind farm grid ID`,`Wind farm state`,`OWEP grid cells (n)`,Total_fish_USD,`Weighted mean LCOE`,`Total MWhyraw`,`Wind farm area (m2)`)
+df<-df %>% drop_na(`Weighted mean LCOE`)
+df<-df[df$`OWEP grid cells (n)`>34,] # Choosing 34 as a cutoff for what could be considered full cells, could amend
+df$Total_fish_USD<-df$Total_fish_USD/1000000
+df$LCOE_MWh<-df$`Weighted mean LCOE`*1000
+df$`Weighted mean LCOE`<-NULL
+df$`Wind farm area (m2)`<-NULL # This isn't a correct calculation, this is actually cell size
+df<-as.data.frame(df)
+df<-df %>% filter(`Wind farm state`=="CA")
+
+ns<-c(seq(1,25,4))
+ns[1]<-2
+pop<-rep(1000,length(ns))
+
+system.time(biggerfish<-map2_dfr(ns,pop,replifish))
+# system.time(biggerfish<-map2(ns,pop,replifish))
+# cagree<-map(biggerfish, pluck, "agree") %>% bind_rows()
+# biggerfish<-map(biggerfish, pluck, "bigfish") %>% bind_rows()
+biggerfish<-biggerfish$bigfish
+
+biggerfish %>% group_by(n) %>% 
+  summarise(sumn = sum(PV), mlcoe = mean(LCOEMWh)) %>% 
+  print(n = 100)
+
+palette <- brewer.pal(n = length(unique(biggerfish$Fishery)), name = "Paired")
+
+dft<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
+dft<-dft %>% dplyr::select(`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD,`Weighted mean LCOE`)
+dft<-as.data.frame(dft)
+dft<-dft %>% filter(`Wind farm state`=="CA")
+fishsum<-dft %>% pivot_longer(cols = !`Wind farm grid ID`,names_to = "Fishery",values_to = "PV") %>% 
+  group_by(Fishery) %>% 
+  summarise(fishsum = sum(PV))
+
+fishsum$Fishery<-gsub("_USD$", "",fishsum$Fishery)
+fishsum$Fishery<-gsub("_", " ",fishsum$Fishery)
+fishsum$Fishery<-gsub("\\.", "-",fishsum$Fishery)
+
+biggerfish$Fishery<-gsub("_USD$", "",biggerfish$Fishery)
+biggerfish$Fishery<-gsub("_", " ",biggerfish$Fishery)
+biggerfish$Fishery<-gsub("\\.", "-",biggerfish$Fishery)
+
+biggerfish<-merge(biggerfish,fishsum,by="Fishery")
+biggerfish$PVperc<-(biggerfish$PV/biggerfish$fishsum)*100
+
+bf_nom_CA<-ggplot(data = biggerfish, aes(x=n*.9, y=PV/1000000, group=Fishery)) + # Nominal expected impact across targets
+  geom_line(aes(colour = Fishery), linewidth = 1) +
+  #geom_point() + 
+  geom_vline(xintercept = 5, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 5, y = min(PV)/1000000 - diff(range(PV)) * 0.05/1000000, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 25, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 25, y = min(PV)/1000000 - diff(range(PV)) * 0.05/1000000, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Mean present value ($Mil)", colour = "Fishery") +
+  xlim(c(0,28))
+
+l_nom<-ggplot(data = biggerfish, aes(x=n*.9, y=LCOEMWh)) + # LCOE expected impact across targets, weird artifacts from lots of pareto sites with high LCOE (TRY MEDIAN)
+  geom_line(linewidth = 1)
+
+bf_perc_CA<-ggplot(data = biggerfish, aes(x=n*.9, y=PVperc, group=Fishery)) + # Percent expected impact across targets
+  geom_line(aes(colour = Fishery), linewidth = 1) +
+  #geom_point() + 
+  geom_vline(xintercept = 5, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 5, y = min(PVperc) - diff(range(PVperc)) * 0.05, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 25, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 25, y = min(PVperc) - diff(range(PVperc)) * 0.05, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Percent", colour = "Fishery") +
+  xlim(c(0,28))
+
+## OR replicated across many targets
+# Loading data
+df<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
+df<-df %>%
+  dplyr::select(`Wind farm grid ID`,`Wind farm state`,`OWEP grid cells (n)`,Total_fish_USD,`Weighted mean LCOE`,`Total MWhyraw`,`Wind farm area (m2)`)
+df<-df %>% drop_na(`Weighted mean LCOE`)
+df<-df[df$`OWEP grid cells (n)`>34,] # Choosing 34 as a cutoff for what could be considered full cells, could amend
+df$Total_fish_USD<-df$Total_fish_USD/1000000
+df$LCOE_MWh<-df$`Weighted mean LCOE`*1000
+df$`Weighted mean LCOE`<-NULL
+df$`Wind farm area (m2)`<-NULL # This isn't a correct calculation, this is actually cell size
+df<-as.data.frame(df)
+df<-df %>% filter(`Wind farm state`=="OR")
+
+ns<-c(seq(1,15,2))
+ns[1]<-2
+pop<-rep(1000,length(ns))
+
+system.time(biggerfish<-map2_dfr(ns,pop,replifish))
+# system.time(biggerfish<-map2(ns,pop,replifish))
+# cagree<-map(biggerfish, pluck, "agree") %>% bind_rows()
+# biggerfish<-map(biggerfish, pluck, "bigfish") %>% bind_rows()
+biggerfish<-biggerfish$bigfish
+
+biggerfish %>% group_by(n) %>% 
+  summarise(sumn = sum(PV), mlcoe = mean(LCOEMWh)) %>% 
+  print(n = 100)
+
+palette <- brewer.pal(n = length(unique(biggerfish$Fishery)), name = "Paired")
+
+dft<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
+dft<-dft %>% dplyr::select(`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD,`Weighted mean LCOE`)
+dft<-as.data.frame(dft)
+dft<-dft %>% filter(`Wind farm state`=="OR")
+fishsum<-dft %>% pivot_longer(cols = !`Wind farm grid ID`,names_to = "Fishery",values_to = "PV") %>% 
+  group_by(Fishery) %>% 
+  summarise(fishsum = sum(PV))
+
+fishsum$Fishery<-gsub("_USD$", "",fishsum$Fishery)
+fishsum$Fishery<-gsub("_", " ",fishsum$Fishery)
+fishsum$Fishery<-gsub("\\.", "-",fishsum$Fishery)
+
+biggerfish$Fishery<-gsub("_USD$", "",biggerfish$Fishery)
+biggerfish$Fishery<-gsub("_", " ",biggerfish$Fishery)
+biggerfish$Fishery<-gsub("\\.", "-",biggerfish$Fishery)
+
+biggerfish<-merge(biggerfish,fishsum,by="Fishery")
+biggerfish$PVperc<-(biggerfish$PV/biggerfish$fishsum)*100
+
+bf_nom_OR<-ggplot(data = biggerfish, aes(x=n*.9, y=PV/1000000, group=Fishery)) + # Nominal expected impact across targets
+  geom_line(aes(colour = Fishery), linewidth = 1) +
+  #geom_point() + 
+  geom_vline(xintercept = 3, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 3, y = min(PV)/1000000 - diff(range(PV)) * 0.05/1000000, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 15, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 15, y = min(PV)/1000000 - diff(range(PV)) * 0.05/1000000, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Mean present value ($Mil)", colour = "Fishery") +
+  xlim(c(0,18))
+
+l_nom<-ggplot(data = biggerfish, aes(x=n*.9, y=LCOEMWh)) + # LCOE expected impact across targets, weird artifacts from lots of pareto sites with high LCOE (TRY MEDIAN)
+  geom_line(linewidth = 1)
+
+bf_perc_OR<-ggplot(data = biggerfish, aes(x=n*.9, y=PVperc, group=Fishery)) + # Percent expected impact across targets
+  geom_line(aes(colour = Fishery), linewidth = 1) +
+  #geom_point() + 
+  geom_vline(xintercept = 3, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 3, y = min(PVperc) - diff(range(PVperc)) * 0.05, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 15, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 15, y = min(PVperc) - diff(range(PVperc)) * 0.05, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Percent", colour = "Fishery") +
+  xlim(c(0,18))
+
+## WA replicated across many targets
+# Loading data
+df<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
+df<-df %>%
+  dplyr::select(`Wind farm grid ID`,`Wind farm state`,`OWEP grid cells (n)`,Total_fish_USD,`Weighted mean LCOE`,`Total MWhyraw`,`Wind farm area (m2)`)
+df<-df %>% drop_na(`Weighted mean LCOE`)
+df<-df[df$`OWEP grid cells (n)`>34,] # Choosing 34 as a cutoff for what could be considered full cells, could amend
+df$Total_fish_USD<-df$Total_fish_USD/1000000
+df$LCOE_MWh<-df$`Weighted mean LCOE`*1000
+df$`Weighted mean LCOE`<-NULL
+df$`Wind farm area (m2)`<-NULL # This isn't a correct calculation, this is actually cell size
+df<-as.data.frame(df)
+df<-df %>% filter(`Wind farm state`=="WA")
+
+ns<-c(seq(1,15,2))
+ns[1]<-2
+pop<-rep(1000,length(ns))
+
+system.time(biggerfish<-map2_dfr(ns,pop,replifish))
+# system.time(biggerfish<-map2(ns,pop,replifish))
+# cagree<-map(biggerfish, pluck, "agree") %>% bind_rows()
+# biggerfish<-map(biggerfish, pluck, "bigfish") %>% bind_rows()
+biggerfish<-biggerfish$bigfish
+
+biggerfish %>% group_by(n) %>% 
+  summarise(sumn = sum(PV), mlcoe = mean(LCOEMWh)) %>% 
+  print(n = 100)
+
+palette <- brewer.pal(n = length(unique(biggerfish$Fishery)), name = "Paired")
+
+dft<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
+dft<-dft %>% dplyr::select(`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD,`Weighted mean LCOE`)
+dft<-as.data.frame(dft)
+dft<-dft %>% filter(`Wind farm state`=="WA")
+fishsum<-dft %>% pivot_longer(cols = !`Wind farm grid ID`,names_to = "Fishery",values_to = "PV") %>% 
+  group_by(Fishery) %>% 
+  summarise(fishsum = sum(PV))
+
+fishsum$Fishery<-gsub("_USD$", "",fishsum$Fishery)
+fishsum$Fishery<-gsub("_", " ",fishsum$Fishery)
+fishsum$Fishery<-gsub("\\.", "-",fishsum$Fishery)
+
+biggerfish$Fishery<-gsub("_USD$", "",biggerfish$Fishery)
+biggerfish$Fishery<-gsub("_", " ",biggerfish$Fishery)
+biggerfish$Fishery<-gsub("\\.", "-",biggerfish$Fishery)
+
+biggerfish<-merge(biggerfish,fishsum,by="Fishery")
+biggerfish$PVperc<-(biggerfish$PV/biggerfish$fishsum)*100
+
+bf_nom_WA<-ggplot(data = biggerfish, aes(x=n*.9, y=PV/1000000, group=Fishery)) + # Nominal expected impact across targets
+  geom_line(aes(colour = Fishery), linewidth = 1) +
+  #geom_point() + 
+  geom_vline(xintercept = 3, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 3, y = min(PV)/1000000 - diff(range(PV)) * 0.05/1000000, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 15, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 15, y = min(PV)/1000000 - diff(range(PV)) * 0.05/1000000, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Mean present value ($Mil)", colour = "Fishery") +
+  xlim(c(0,18))
+
+l_nom<-ggplot(data = biggerfish, aes(x=n*.9, y=LCOEMWh)) + # LCOE expected impact across targets, weird artifacts from lots of pareto sites with high LCOE (TRY MEDIAN)
+  geom_line(linewidth = 1)
+
+bf_perc_WA<-ggplot(data = biggerfish, aes(x=n*.9, y=PVperc, group=Fishery)) + # Percent expected impact across targets
+  geom_line(aes(colour = Fishery), linewidth = 1) +
+  #geom_point() + 
+  geom_vline(xintercept = 3, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 3, y = min(PVperc) - diff(range(PVperc)) * 0.05, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 15, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 15, y = min(PVperc) - diff(range(PVperc)) * 0.05, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Percent", colour = "Fishery") +
+  xlim(c(0,18))
+
+
+## Gathering figures
 bf_nom / bf_perc + plot_annotation(tag_levels = 'A') + plot_layout(guides = 'collect')
 bf_nom + bf_perc + plot_annotation(tag_levels = 'A') + plot_layout(guides = "collect")
+
+
 
 # ## Non-domiNULL# ## Non-dominated Sorting Genetic Algorithm II using a repair function and index based drawing
 # 
