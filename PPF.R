@@ -739,6 +739,8 @@ biggerfish$Fishery<-gsub("\\.", "-",biggerfish$Fishery)
 biggerfish<-merge(biggerfish,fishsum,by="Fishery")
 biggerfish$PVperc<-(biggerfish$PV/biggerfish$fishsum)*100
 
+biggerfishR<-biggerfish
+
 bf_nom<-ggplot(data = biggerfish, aes(x=n*.9, y=PV/1000000, group=Fishery)) + # Nominal expected impact across targets
   geom_line(aes(colour = Fishery), linewidth = 1) +
   #geom_point() + 
@@ -780,7 +782,7 @@ df$`Wind farm area (m2)`<-NULL # This isn't a correct calculation, this is actua
 df<-as.data.frame(df)
 df<-df %>% filter(`Wind farm state`=="CA")
 
-ns<-c(seq(1,25,4))
+ns<-c(seq(1,30,2))
 ns[1]<-2
 pop<-rep(1000,length(ns))
 
@@ -797,9 +799,9 @@ biggerfish %>% group_by(n) %>%
 palette <- brewer.pal(n = length(unique(biggerfish$Fishery)), name = "Paired")
 
 dft<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
-dft<-dft %>% dplyr::select(`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD,`Weighted mean LCOE`)
+dft<-dft %>% dplyr::select(`Wind farm state`,`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD,`Weighted mean LCOE`)
 dft<-as.data.frame(dft)
-dft<-dft %>% filter(`Wind farm state`=="CA")
+dft<-dft %>% filter(`Wind farm state`=="CA") %>% select(!`Wind farm state`)
 fishsum<-dft %>% pivot_longer(cols = !`Wind farm grid ID`,names_to = "Fishery",values_to = "PV") %>% 
   group_by(Fishery) %>% 
   summarise(fishsum = sum(PV))
@@ -814,6 +816,9 @@ biggerfish$Fishery<-gsub("\\.", "-",biggerfish$Fishery)
 
 biggerfish<-merge(biggerfish,fishsum,by="Fishery")
 biggerfish$PVperc<-(biggerfish$PV/biggerfish$fishsum)*100
+biggerfish<-biggerfish %>% mutate(across(everything(), ~replace(.x, is.nan(.x), 0))) # Some species with no harvest in state waters introduces a NaN when dividing 0 by 0
+
+biggerfishCA<-biggerfish
 
 bf_nom_CA<-ggplot(data = biggerfish, aes(x=n*.9, y=PV/1000000, group=Fishery)) + # Nominal expected impact across targets
   geom_line(aes(colour = Fishery), linewidth = 1) +
@@ -856,7 +861,7 @@ df$`Wind farm area (m2)`<-NULL # This isn't a correct calculation, this is actua
 df<-as.data.frame(df)
 df<-df %>% filter(`Wind farm state`=="OR")
 
-ns<-c(seq(1,15,2))
+ns<-c(seq(1,17,2))
 ns[1]<-2
 pop<-rep(1000,length(ns))
 
@@ -873,9 +878,9 @@ biggerfish %>% group_by(n) %>%
 palette <- brewer.pal(n = length(unique(biggerfish$Fishery)), name = "Paired")
 
 dft<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
-dft<-dft %>% dplyr::select(`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD,`Weighted mean LCOE`)
+dft<-dft %>% dplyr::select(`Wind farm state`,`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD,`Weighted mean LCOE`)
 dft<-as.data.frame(dft)
-dft<-dft %>% filter(`Wind farm state`=="OR")
+dft<-dft %>% filter(`Wind farm state`=="OR") %>% select(!`Wind farm state`)
 fishsum<-dft %>% pivot_longer(cols = !`Wind farm grid ID`,names_to = "Fishery",values_to = "PV") %>% 
   group_by(Fishery) %>% 
   summarise(fishsum = sum(PV))
@@ -889,7 +894,10 @@ biggerfish$Fishery<-gsub("_", " ",biggerfish$Fishery)
 biggerfish$Fishery<-gsub("\\.", "-",biggerfish$Fishery)
 
 biggerfish<-merge(biggerfish,fishsum,by="Fishery")
-biggerfish$PVperc<-(biggerfish$PV/biggerfish$fishsum)*100
+biggerfish$PVperc<-(biggerfish$PV/biggerfish$fishsum)*100 
+biggerfish<-biggerfish %>% mutate(across(everything(), ~replace(.x, is.nan(.x), 0))) # Some species with no harvest in state waters introduces a NaN when dividing 0 by 0
+
+biggerfishOR<-biggerfish
 
 bf_nom_OR<-ggplot(data = biggerfish, aes(x=n*.9, y=PV/1000000, group=Fishery)) + # Nominal expected impact across targets
   geom_line(aes(colour = Fishery), linewidth = 1) +
@@ -932,7 +940,7 @@ df$`Wind farm area (m2)`<-NULL # This isn't a correct calculation, this is actua
 df<-as.data.frame(df)
 df<-df %>% filter(`Wind farm state`=="WA")
 
-ns<-c(seq(1,15,2))
+ns<-c(seq(1,17,2))
 ns[1]<-2
 pop<-rep(1000,length(ns))
 
@@ -949,9 +957,9 @@ biggerfish %>% group_by(n) %>%
 palette <- brewer.pal(n = length(unique(biggerfish$Fishery)), name = "Paired")
 
 dft<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
-dft<-dft %>% dplyr::select(`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD,`Weighted mean LCOE`)
+dft<-dft %>% dplyr::select(`Wind farm state`,`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD,`Weighted mean LCOE`)
 dft<-as.data.frame(dft)
-dft<-dft %>% filter(`Wind farm state`=="WA")
+dft<-dft %>% filter(`Wind farm state`=="WA") %>% select(!`Wind farm state`)
 fishsum<-dft %>% pivot_longer(cols = !`Wind farm grid ID`,names_to = "Fishery",values_to = "PV") %>% 
   group_by(Fishery) %>% 
   summarise(fishsum = sum(PV))
@@ -966,6 +974,9 @@ biggerfish$Fishery<-gsub("\\.", "-",biggerfish$Fishery)
 
 biggerfish<-merge(biggerfish,fishsum,by="Fishery")
 biggerfish$PVperc<-(biggerfish$PV/biggerfish$fishsum)*100
+biggerfish<-biggerfish %>% mutate(across(everything(), ~replace(.x, is.nan(.x), 0))) # Some species with no harvest in state waters introduces a NaN when dividing 0 by 0
+
+biggerfishWA<-biggerfish
 
 bf_nom_WA<-ggplot(data = biggerfish, aes(x=n*.9, y=PV/1000000, group=Fishery)) + # Nominal expected impact across targets
   geom_line(aes(colour = Fishery), linewidth = 1) +
@@ -995,9 +1006,51 @@ bf_perc_WA<-ggplot(data = biggerfish, aes(x=n*.9, y=PVperc, group=Fishery)) + # 
   xlim(c(0,18))
 
 
-## Gathering figures
-bf_nom / bf_perc + plot_annotation(tag_levels = 'A') + plot_layout(guides = 'collect')
-bf_nom + bf_perc + plot_annotation(tag_levels = 'A') + plot_layout(guides = "collect")
+## Gathering figures (EDIT)
+# Combined figure - adds up exposure when forced to develop to targets within state-adjacent waters
+biggerfishcomb<-rbind(biggerfishCA,biggerfishOR,biggerfishWA)
+# sum by n by species (n equal across states makes for consistent summation) and also sum n to get to aggregate n 
+bfn17<-biggerfishcomb %>% filter(n<19) %>% # Identifying and aggregating exposure across all states for their overlapping targets
+  group_by(n,Fishery) %>% 
+  summarise(PVsum = sum(PV),GW = sum(n)*.9) %>% 
+  as.data.frame()
+bf51<-bfn17 %>% filter(GW==45.9) %>% select(Fishery,PVsum)# Identifying sum from overlapping targets
+bfn19<-biggerfishcomb %>% filter(n>17) %>% 
+  mutate(n=n-17, GW = (n + 51)*.9)
+bfn19<-merge(bfn19,bf51, by = "Fishery")
+bfn19$PVsum<-bfn19$PV+bfn19$PVsum
+bfn19<-bfn19 %>% dplyr::select(n,Fishery,PVsum,GW)
+bf<-rbind(bfn19,bfn17)  
+rm(bfn19,bfn17,bf51)
+
+bf_nom_state<-ggplot(data = bf, aes(x=GW, y=PVsum/1000000, group=Fishery)) + # Nominal expected impact across targets
+  geom_line(aes(colour = Fishery), linewidth = 1) +
+  #geom_point() + 
+  geom_vline(xintercept = 11, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 11, y = min(PVsum)/1000000 - diff(range(PVsum)) * 0.05/1000000, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 55, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 55, y = min(PVsum)/1000000 - diff(range(PVsum)) * 0.05/1000000, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Mean present value ($Mil)", colour = "Fishery") +
+  xlim(c(0,60))
+
+design<-"AAABBB
+         CCDDEE"
+
+bf_nom<-bf_nom + labs(y = "Mean present value exposed ($Mil)")
+bf_nom_state<-bf_nom_state + labs(y = "Mean present value exposed ($Mil)")
+bf_nom_CA<-bf_nom_CA + labs(y = "Mean present value exposed ($Mil)")
+bf_nom_OR<-bf_nom_OR + labs(y = "Mean present value exposed ($Mil)")
+bf_nom_WA<-bf_nom_WA + labs(y = "Mean present value exposed ($Mil)")
+
+trend_nom_r<-bf_nom + bf_state + plot_layout(axis_titles = "collect") 
+trend_nom_s<-bf_nom_CA + bf_nom_OR + bf_nom_WA + plot_layout(axis_titles = "collect")
+
+trend_nom_r / trend_nom_s + plot_annotation(tag_levels = 'A') + plot_layout(guides = "collect")
+
+# Total regional exposure in 2045 when optimizing regionally or by state 
+
 
 
 
@@ -1096,304 +1149,304 @@ bf_nom + bf_perc + plot_annotation(tag_levels = 'A') + plot_layout(guides = "col
 # it<-1000
 # n<-326
 
-## Sampling based approach
-pareto<-function(x,n,it){
-  # x - Dataframe
-  # n - Subset size (# of cells needed to meet wind energy goal)
-  # it - Number of sampling iterations
-  
-  # Storage for all evaluated solutions
-  all_solutions <- data.frame(sum_v1 = numeric(), avg_v2 = numeric(), CA = numeric(), WA = numeric(), OR = numeric(), sum_MWhr_yr = numeric())
-  
-  for (i in 1:it) {
-    # Randomly select n items
-    selected_indices <- sample(nrow(x), n)
-    
-    # Calculate objectives
-    sum_v1 <- sum(x$Total_fish_USD[selected_indices])  # Objective 1: Minimize sum of v1
-    avg_v2 <- mean(x$LCOE_MWh[selected_indices])  # Objective 2: Minimize average of v2
-    
-    # N in each state and aggregate energy
-    a<-x %>% slice(selected_indices)
-    e<-sum(a$MWhyraw) # Aggregate energy
-    a<-a %>% 
-      group_by(State) %>% 
-      summarise(count = n(),.groups = "drop") %>% 
-      pivot_wider(names_from = State,values_from = count)
-
-    # Store each solution's objectives
-    all_solutions <- rbind(all_solutions, list(sum_v1 = sum_v1, avg_v2 = avg_v2, CA = a$CA, WA = a$WA, OR = a$OR, sum_MWhr_yr = e))
-  }
-  
-  # Determine Pareto-optimality for each solution
-  is_pareto_optimal <- function(index, solutions) {
-    for (j in 1:nrow(solutions)) {
-      if (j != index && solutions[j, "sum_v1"] <= solutions[index, "sum_v1"] && solutions[j, "avg_v2"] <= solutions[index, "avg_v2"]) {
-        return(FALSE)  # Solution is dominated if another solution is better (lower) in both objectives
-      }
-    }
-    return(TRUE)  # Solution is Pareto-optimal if no other solution is better (lower) in both objectives
-  }
-  
-  pareto_optimal_indices <- sapply(1:nrow(all_solutions), function(i) is_pareto_optimal(i, all_solutions))
-  
-  # Extract Pareto-optimal solutions
-  pareto_solutions <- all_solutions[pareto_optimal_indices, ]
-  pareto_solutions_ordered <- pareto_solutions[order(pareto_solutions$sum_v1), ]
-  
-  # Adding an identifier for plotting
-  all_solutions$Type <- 'Dominated'
-  pareto_solutions_ordered$Type <- 'Pareto-optimal'
-  
-  # Combine all solutions for plotting
-  plot_data <- rbind(
-    all_solutions,
-    pareto_solutions_ordered)
-  
-  a<-ggplot() +
-    geom_point(data = plot_data %>% filter(Type=="Pareto-optimal"), aes(x = sum_v1, y = avg_v2, color = "Red"), size = 2) +
-    geom_line(data = pareto_solutions_ordered, aes(x = sum_v1, y = avg_v2), color = "blue", linewidth = 1) +
-    #scale_color_manual(values = c("Pareto-optimal" = "red", "Dominated" = "gray")) +
-    theme_minimal() +
-    labs(x = "Sum fishing PV ($Mil)", y = "Mean LCOE ($/MWh)") +
-    theme(legend.title = element_blank(),legend.position="none") 
-  
-  return(list(a,plot_data))
-}
-
-paretos<-function(x,n,it){ # Same as function above, but doesn't track outcomes by state
-  # x - Dataframe
-  # n - Subset size (# of cells needed to meet wind energy goal)
-  # it - Number of sampling iterations
-  
-  # Storage for all evaluated solutions
-  all_solutions <- data.frame(sum_v1 = numeric(), avg_v2 = numeric(), sum_MWhr_yr = numeric())
-  
-  for (i in 1:it) {
-    # Randomly select n items
-    selected_indices <- sample(nrow(x), n)
-    
-    # Calculate objectives
-    sum_v1 <- sum(x$Total_fish_USD[selected_indices])  # Objective 1: Minimize sum of v1
-    avg_v2 <- mean(x$LCOE_MWh[selected_indices])  # Objective 2: Minimize average of v2
-    
-    # Aggregate energy 
-    a<-x %>% slice(selected_indices)
-    e<-sum(a$MWhyraw) # Aggregate energy
-    
-    # Store each solution's objectives
-    all_solutions <- rbind(all_solutions, list(sum_v1 = sum_v1, avg_v2 = avg_v2, sum_MWhr_yr = e))
-  }
-  
-  # Determine Pareto-optimality for each solution
-  is_pareto_optimal <- function(index, solutions) {
-    for (j in 1:nrow(solutions)) {
-      if (j != index && solutions[j, "sum_v1"] <= solutions[index, "sum_v1"] && solutions[j, "avg_v2"] <= solutions[index, "avg_v2"]) {
-        return(FALSE)  # Solution is dominated if another solution is better (lower) in both objectives
-      }
-    }
-    return(TRUE)  # Solution is Pareto-optimal if no other solution is better (lower) in both objectives
-  }
-  
-  pareto_optimal_indices <- sapply(1:nrow(all_solutions), function(i) is_pareto_optimal(i, all_solutions))
-  
-  # Extract Pareto-optimal solutions
-  pareto_solutions <- all_solutions[pareto_optimal_indices, ]
-  pareto_solutions_ordered <- pareto_solutions[order(pareto_solutions$sum_v1), ]
-  
-  # Adding an identifier for plotting
-  all_solutions$Type <- 'Dominated'
-  pareto_solutions_ordered$Type <- 'Pareto-optimal'
-  
-  # Combine all solutions for plotting
-  plot_data <- rbind(
-    all_solutions,
-    pareto_solutions_ordered)
-  
-  a<-ggplot() +
-    geom_point(data = plot_data %>% filter(Type=="Pareto-optimal"), aes(x = sum_v1, y = avg_v2, color = "Red"), size = 2) +
-    geom_line(data = pareto_solutions_ordered, aes(x = sum_v1, y = avg_v2), color = "blue", linewidth = 1) +
-    #scale_color_manual(values = c("Pareto-optimal" = "red", "Dominated" = "gray")) +
-    theme_minimal() +
-    labs(x = "Sum fishing PV ($Mil)", y = "Mean LCOE ($/MWh)") +
-    theme(legend.title = element_blank(),legend.position="none") 
-  
-  return(list(a,plot_data))
-}
-
-# Sampling
-iterations<-1000
-system.time(region<-pareto(x = df,n = 326, it = iterations)) # 9 hrs @ 1m iterations
-system.time(ca<-paretos(x = df %>% filter(State == "CA"),n = 204, it = iterations)) # 3.5 hrs @ 1m
-system.time(or<-paretos(x = df %>% filter(State == "OR"),n = 122, it = iterations)) # 3.5 hrs @ 1m
-system.time(wa<-paretos(x = df %>% filter(State == "WA"),n = 122, it = iterations)) # 3.5 hrs @ 1m
-
-(region[[1]] + ca[[1]]) / (or[[1]] + wa[[1]]) + # Unified plot
-  plot_annotation(tag_levels = "A") & theme(plot.tag = element_text(size = 12))
-
-region[[2]] %>% as.data.frame() %>% filter(Type == "Pareto-optimal") # Number of pareto optimal sites in each state across scenarios
-
-region[[2]]$lcoe_x_MWh<-region[[2]]$avg_v2*region[[2]]$sum_MWhr_yr # Cost of production 
-ca[[2]]$lcoe_x_MWh<-ca[[2]]$avg_v2*ca[[2]]$sum_MWhr_yr
-wa[[2]]$lcoe_x_MWh<-wa[[2]]$avg_v2*wa[[2]]$sum_MWhr_yr
-or[[2]]$lcoe_x_MWh<-or[[2]]$avg_v2*or[[2]]$sum_MWhr_yr
-
-region[[2]] %>% as.data.frame() %>% filter(Type == "Pareto-optimal") # Number of pareto optimal sites in each state across scenarios
-
-ca[[2]] %>% as.data.frame() %>% filter(Type == "Pareto-optimal") # Table of pareto optimal outcomes
-or[[2]] %>% as.data.frame() %>% filter(Type == "Pareto-optimal")
-
-df %>% group_by(State) %>% # Mean LCOE by state
-  summarise(meanLCOE = mean(LCOE_MWh))
-
-ggplot(df, aes(LCOE_MWh, colour = State)) + # CDF of LCOE by state
-  stat_ecdf(linewidth = 1) +
-  labs(y = "", x = "Mean LCOE ($/MWh)") +
-  theme_minimal()
-
-# ggplot(df, aes(LCOE_MWh, weight = weight, color = State)) + # Histogram by state to account for differing sample sizes
-#   #geom_density() +
-#   stat_bin(geom = "line", bins = 500, position = position_identity(),linewidth = 1) +
-#   scale_fill_brewer(palette = "Pastel1") +
+# ## Sampling based approach
+# pareto<-function(x,n,it){
+#   # x - Dataframe
+#   # n - Subset size (# of cells needed to meet wind energy goal)
+#   # it - Number of sampling iterations
+#   
+#   # Storage for all evaluated solutions
+#   all_solutions <- data.frame(sum_v1 = numeric(), avg_v2 = numeric(), CA = numeric(), WA = numeric(), OR = numeric(), sum_MWhr_yr = numeric())
+#   
+#   for (i in 1:it) {
+#     # Randomly select n items
+#     selected_indices <- sample(nrow(x), n)
+#     
+#     # Calculate objectives
+#     sum_v1 <- sum(x$Total_fish_USD[selected_indices])  # Objective 1: Minimize sum of v1
+#     avg_v2 <- mean(x$LCOE_MWh[selected_indices])  # Objective 2: Minimize average of v2
+#     
+#     # N in each state and aggregate energy
+#     a<-x %>% slice(selected_indices)
+#     e<-sum(a$MWhyraw) # Aggregate energy
+#     a<-a %>% 
+#       group_by(State) %>% 
+#       summarise(count = n(),.groups = "drop") %>% 
+#       pivot_wider(names_from = State,values_from = count)
+# 
+#     # Store each solution's objectives
+#     all_solutions <- rbind(all_solutions, list(sum_v1 = sum_v1, avg_v2 = avg_v2, CA = a$CA, WA = a$WA, OR = a$OR, sum_MWhr_yr = e))
+#   }
+#   
+#   # Determine Pareto-optimality for each solution
+#   is_pareto_optimal <- function(index, solutions) {
+#     for (j in 1:nrow(solutions)) {
+#       if (j != index && solutions[j, "sum_v1"] <= solutions[index, "sum_v1"] && solutions[j, "avg_v2"] <= solutions[index, "avg_v2"]) {
+#         return(FALSE)  # Solution is dominated if another solution is better (lower) in both objectives
+#       }
+#     }
+#     return(TRUE)  # Solution is Pareto-optimal if no other solution is better (lower) in both objectives
+#   }
+#   
+#   pareto_optimal_indices <- sapply(1:nrow(all_solutions), function(i) is_pareto_optimal(i, all_solutions))
+#   
+#   # Extract Pareto-optimal solutions
+#   pareto_solutions <- all_solutions[pareto_optimal_indices, ]
+#   pareto_solutions_ordered <- pareto_solutions[order(pareto_solutions$sum_v1), ]
+#   
+#   # Adding an identifier for plotting
+#   all_solutions$Type <- 'Dominated'
+#   pareto_solutions_ordered$Type <- 'Pareto-optimal'
+#   
+#   # Combine all solutions for plotting
+#   plot_data <- rbind(
+#     all_solutions,
+#     pareto_solutions_ordered)
+#   
+#   a<-ggplot() +
+#     geom_point(data = plot_data %>% filter(Type=="Pareto-optimal"), aes(x = sum_v1, y = avg_v2, color = "Red"), size = 2) +
+#     geom_line(data = pareto_solutions_ordered, aes(x = sum_v1, y = avg_v2), color = "blue", linewidth = 1) +
+#     #scale_color_manual(values = c("Pareto-optimal" = "red", "Dominated" = "gray")) +
+#     theme_minimal() +
+#     labs(x = "Sum fishing PV ($Mil)", y = "Mean LCOE ($/MWh)") +
+#     theme(legend.title = element_blank(),legend.position="none") 
+#   
+#   return(list(a,plot_data))
+# }
+# 
+# paretos<-function(x,n,it){ # Same as function above, but doesn't track outcomes by state
+#   # x - Dataframe
+#   # n - Subset size (# of cells needed to meet wind energy goal)
+#   # it - Number of sampling iterations
+#   
+#   # Storage for all evaluated solutions
+#   all_solutions <- data.frame(sum_v1 = numeric(), avg_v2 = numeric(), sum_MWhr_yr = numeric())
+#   
+#   for (i in 1:it) {
+#     # Randomly select n items
+#     selected_indices <- sample(nrow(x), n)
+#     
+#     # Calculate objectives
+#     sum_v1 <- sum(x$Total_fish_USD[selected_indices])  # Objective 1: Minimize sum of v1
+#     avg_v2 <- mean(x$LCOE_MWh[selected_indices])  # Objective 2: Minimize average of v2
+#     
+#     # Aggregate energy 
+#     a<-x %>% slice(selected_indices)
+#     e<-sum(a$MWhyraw) # Aggregate energy
+#     
+#     # Store each solution's objectives
+#     all_solutions <- rbind(all_solutions, list(sum_v1 = sum_v1, avg_v2 = avg_v2, sum_MWhr_yr = e))
+#   }
+#   
+#   # Determine Pareto-optimality for each solution
+#   is_pareto_optimal <- function(index, solutions) {
+#     for (j in 1:nrow(solutions)) {
+#       if (j != index && solutions[j, "sum_v1"] <= solutions[index, "sum_v1"] && solutions[j, "avg_v2"] <= solutions[index, "avg_v2"]) {
+#         return(FALSE)  # Solution is dominated if another solution is better (lower) in both objectives
+#       }
+#     }
+#     return(TRUE)  # Solution is Pareto-optimal if no other solution is better (lower) in both objectives
+#   }
+#   
+#   pareto_optimal_indices <- sapply(1:nrow(all_solutions), function(i) is_pareto_optimal(i, all_solutions))
+#   
+#   # Extract Pareto-optimal solutions
+#   pareto_solutions <- all_solutions[pareto_optimal_indices, ]
+#   pareto_solutions_ordered <- pareto_solutions[order(pareto_solutions$sum_v1), ]
+#   
+#   # Adding an identifier for plotting
+#   all_solutions$Type <- 'Dominated'
+#   pareto_solutions_ordered$Type <- 'Pareto-optimal'
+#   
+#   # Combine all solutions for plotting
+#   plot_data <- rbind(
+#     all_solutions,
+#     pareto_solutions_ordered)
+#   
+#   a<-ggplot() +
+#     geom_point(data = plot_data %>% filter(Type=="Pareto-optimal"), aes(x = sum_v1, y = avg_v2, color = "Red"), size = 2) +
+#     geom_line(data = pareto_solutions_ordered, aes(x = sum_v1, y = avg_v2), color = "blue", linewidth = 1) +
+#     #scale_color_manual(values = c("Pareto-optimal" = "red", "Dominated" = "gray")) +
+#     theme_minimal() +
+#     labs(x = "Sum fishing PV ($Mil)", y = "Mean LCOE ($/MWh)") +
+#     theme(legend.title = element_blank(),legend.position="none") 
+#   
+#   return(list(a,plot_data))
+# }
+# 
+# # Sampling
+# iterations<-1000
+# system.time(region<-pareto(x = df,n = 326, it = iterations)) # 9 hrs @ 1m iterations
+# system.time(ca<-paretos(x = df %>% filter(State == "CA"),n = 204, it = iterations)) # 3.5 hrs @ 1m
+# system.time(or<-paretos(x = df %>% filter(State == "OR"),n = 122, it = iterations)) # 3.5 hrs @ 1m
+# system.time(wa<-paretos(x = df %>% filter(State == "WA"),n = 122, it = iterations)) # 3.5 hrs @ 1m
+# 
+# (region[[1]] + ca[[1]]) / (or[[1]] + wa[[1]]) + # Unified plot
+#   plot_annotation(tag_levels = "A") & theme(plot.tag = element_text(size = 12))
+# 
+# region[[2]] %>% as.data.frame() %>% filter(Type == "Pareto-optimal") # Number of pareto optimal sites in each state across scenarios
+# 
+# region[[2]]$lcoe_x_MWh<-region[[2]]$avg_v2*region[[2]]$sum_MWhr_yr # Cost of production 
+# ca[[2]]$lcoe_x_MWh<-ca[[2]]$avg_v2*ca[[2]]$sum_MWhr_yr
+# wa[[2]]$lcoe_x_MWh<-wa[[2]]$avg_v2*wa[[2]]$sum_MWhr_yr
+# or[[2]]$lcoe_x_MWh<-or[[2]]$avg_v2*or[[2]]$sum_MWhr_yr
+# 
+# region[[2]] %>% as.data.frame() %>% filter(Type == "Pareto-optimal") # Number of pareto optimal sites in each state across scenarios
+# 
+# ca[[2]] %>% as.data.frame() %>% filter(Type == "Pareto-optimal") # Table of pareto optimal outcomes
+# or[[2]] %>% as.data.frame() %>% filter(Type == "Pareto-optimal")
+# 
+# df %>% group_by(State) %>% # Mean LCOE by state
+#   summarise(meanLCOE = mean(LCOE_MWh))
+# 
+# ggplot(df, aes(LCOE_MWh, colour = State)) + # CDF of LCOE by state
+#   stat_ecdf(linewidth = 1) +
+#   labs(y = "", x = "Mean LCOE ($/MWh)") +
 #   theme_minimal()
-
-
-## GPareto - probably need to adapt the function more for our context
-
-f<-function(x){
-  print(nrow(x)) # Debug line to print the number of rows in x
-  if (!is.data.frame(x)) {
-    stop("The input x is not a dataframe.")
-  }
-  if (nrow(x) < 3) {
-    stop("The dataframe x must have at least 3 rows.")
-  }
-  s<-x[sample(nrow(x), replace = FALSE, size = 3), ]
-  sx<-sum(s$Total_fish_USD)
-  sy<-mean(s$LCOE_kWh)
-  
-  print(s)
-  print(sx)
-  print(sy)
-  
-  return(cbind(sx,sy))
-}
-
-f2<-function(x){
-  s<-as.matrix(x)
-  s<-s[sample(nrow(s), replace = FALSE, size = 3), , drop = FALSE] ## See this https://stackoverflow.com/questions/50843515/sampling-columns-in-a-matrix-within-r about dropping
-  sx<-sum(s[,1])
-  sy<-mean(s[,2], na.rm = TRUE)
-  return(cbind(sx,sy))
-}
-
-f3<-function(x){
-  s<-df3[sample(nrow(df3), replace = FALSE, size = 3),]
-  sx<-sum(s[,1])
-  sy<-mean(s[,2], na.rm = TRUE)
-  return(cbind(sx,sy))
-}
-
-f2(df3)
-
-df3<-as.matrix(df3)
-
-res<-easyGParetoptim(fn = f2, budget = 5, lower = c(0,0), upper = c(1,1))
-
-
-####
-P1 <-
-  function(x){
-    if(is.null(dim(x))){
-      x <- matrix(x, nrow = 1) 
-    }
-    b1<-15*x[,1]-5
-    b2<-15*x[,2]
-    return(cbind((b2-5.1*(b1/(2*pi))^2+5/pi*b1-6)^2 +10*((1-1/(8*pi))*cos(b1)+1),
-                 -sqrt((10.5-b1)*(b1+5.5)*(b2+0.5)) - 1/30*(b2 -5.1*(b1/(2*pi))^2-6)^2 - 1/3*((1-1/(8*pi))*cos(b1)+1)
-    ) 
-    )
-  }
-
-d <- 2; ninit <- 10; fun <- P1
-design <- DiceDesign::lhsDesign(ninit, d, seed = 42)$design
-class(design)
-
-res<-easyGParetoptim(fn = P1, budget = 50, lower = c(0,0), upper = c(1,1))
-plotGPareto(res)
-
-#####
-MOP2 <- function(x)
-{
-  xmod <- x*4 - 2
-  if (is.null(nrow(x)))
-  { 
-    n <- length(xmod)
-    y1 <- 1 - exp(-sum((xmod - 1/sqrt(n))^2) )
-    y2 <- 1 - exp(-sum((xmod + 1/sqrt(n))^2) )
-    Y <- matrix(c(y1,y2),1,2)
-  } else
-  {
-    n <- ncol(xmod)
-    y1 <- 1 - exp(-rowSums((xmod - 1/sqrt(n))^2) )
-    y2 <- 1 - exp(-rowSums((xmod + 1/sqrt(n))^2) )
-    Y <- cbind(y1,y2)
-  }
-  
-  return(Y)
-}
-
-xmod <- a*4 - 2
-
-design.init <- matrix(seq(0, 1, length.out = 6), ncol = 1)
-response.init <- MOP2(design.init)
-MOP2(design.init)
-
-mf1 <- km(~1, design = design.init, response = response.init[, 1])
-mf2 <- km(~1, design = design.init, response = response.init[, 2])
-model <- list(mf1, mf2)
-
-res <- GParetoptim(model = model, fn = MOP2, crit = "EHI", nsteps = 25,lower = 0, upper = 1, critcontrol = list(refPoint = c(2, 2)))
-plotGPareto(res)
-res<-easyGParetoptim(fn = MOP2, budget = 100, lower = c(0,0), upper = c(1,1))
-plotGPareto(res)
-
-
-###############
-
-DTLZ2 <- function(x, nobj = 3){
-  if(is.null(dim(x))){
-    x <- matrix(x, 1) 
-  }
-  n <- ncol(x)
-  
-  y <- matrix(x[,1:(nobj-1)], nrow(x))
-  z <- matrix(x[,nobj:n], nrow(x))
-  
-  g <- rowSums((z-0.5)^2)
-  
-  #   tmp <- c(rev(cumprod(cos(y * pi/2))), 1)
-  #   tmp2 <- c(1, rev(sin(y * pi/2)))
-  tmp <- t(apply(cos(y * pi/2), 1, cumprod))
-  tmp <- cbind(t(apply(tmp, 1, rev)), 1)
-  
-  tmp2 <- cbind(1, t(apply(sin(y * pi/2), 1, rev)))
-  
-  f <- tmp * tmp2 * (1 + g)
-  
-}
-
-y <- matrix(data = x[,1:(3-1)], nrow(x))
-z <- matrix(x[,3:n], nrow(x))
-
-a<-rbind(rep(1,5),seq(1,5,1))
-
-
-
-DTLZ2
-
-ZDT2(a)
-
-?ZDT3()
-
-    
+# 
+# # ggplot(df, aes(LCOE_MWh, weight = weight, color = State)) + # Histogram by state to account for differing sample sizes
+# #   #geom_density() +
+# #   stat_bin(geom = "line", bins = 500, position = position_identity(),linewidth = 1) +
+# #   scale_fill_brewer(palette = "Pastel1") +
+# #   theme_minimal()
+# 
+# 
+# ## GPareto - probably need to adapt the function more for our context
+# 
+# f<-function(x){
+#   print(nrow(x)) # Debug line to print the number of rows in x
+#   if (!is.data.frame(x)) {
+#     stop("The input x is not a dataframe.")
+#   }
+#   if (nrow(x) < 3) {
+#     stop("The dataframe x must have at least 3 rows.")
+#   }
+#   s<-x[sample(nrow(x), replace = FALSE, size = 3), ]
+#   sx<-sum(s$Total_fish_USD)
+#   sy<-mean(s$LCOE_kWh)
+#   
+#   print(s)
+#   print(sx)
+#   print(sy)
+#   
+#   return(cbind(sx,sy))
+# }
+# 
+# f2<-function(x){
+#   s<-as.matrix(x)
+#   s<-s[sample(nrow(s), replace = FALSE, size = 3), , drop = FALSE] ## See this https://stackoverflow.com/questions/50843515/sampling-columns-in-a-matrix-within-r about dropping
+#   sx<-sum(s[,1])
+#   sy<-mean(s[,2], na.rm = TRUE)
+#   return(cbind(sx,sy))
+# }
+# 
+# f3<-function(x){
+#   s<-df3[sample(nrow(df3), replace = FALSE, size = 3),]
+#   sx<-sum(s[,1])
+#   sy<-mean(s[,2], na.rm = TRUE)
+#   return(cbind(sx,sy))
+# }
+# 
+# f2(df3)
+# 
+# df3<-as.matrix(df3)
+# 
+# res<-easyGParetoptim(fn = f2, budget = 5, lower = c(0,0), upper = c(1,1))
+# 
+# 
+# ####
+# P1 <-
+#   function(x){
+#     if(is.null(dim(x))){
+#       x <- matrix(x, nrow = 1) 
+#     }
+#     b1<-15*x[,1]-5
+#     b2<-15*x[,2]
+#     return(cbind((b2-5.1*(b1/(2*pi))^2+5/pi*b1-6)^2 +10*((1-1/(8*pi))*cos(b1)+1),
+#                  -sqrt((10.5-b1)*(b1+5.5)*(b2+0.5)) - 1/30*(b2 -5.1*(b1/(2*pi))^2-6)^2 - 1/3*((1-1/(8*pi))*cos(b1)+1)
+#     ) 
+#     )
+#   }
+# 
+# d <- 2; ninit <- 10; fun <- P1
+# design <- DiceDesign::lhsDesign(ninit, d, seed = 42)$design
+# class(design)
+# 
+# res<-easyGParetoptim(fn = P1, budget = 50, lower = c(0,0), upper = c(1,1))
+# plotGPareto(res)
+# 
+# #####
+# MOP2 <- function(x)
+# {
+#   xmod <- x*4 - 2
+#   if (is.null(nrow(x)))
+#   { 
+#     n <- length(xmod)
+#     y1 <- 1 - exp(-sum((xmod - 1/sqrt(n))^2) )
+#     y2 <- 1 - exp(-sum((xmod + 1/sqrt(n))^2) )
+#     Y <- matrix(c(y1,y2),1,2)
+#   } else
+#   {
+#     n <- ncol(xmod)
+#     y1 <- 1 - exp(-rowSums((xmod - 1/sqrt(n))^2) )
+#     y2 <- 1 - exp(-rowSums((xmod + 1/sqrt(n))^2) )
+#     Y <- cbind(y1,y2)
+#   }
+#   
+#   return(Y)
+# }
+# 
+# xmod <- a*4 - 2
+# 
+# design.init <- matrix(seq(0, 1, length.out = 6), ncol = 1)
+# response.init <- MOP2(design.init)
+# MOP2(design.init)
+# 
+# mf1 <- km(~1, design = design.init, response = response.init[, 1])
+# mf2 <- km(~1, design = design.init, response = response.init[, 2])
+# model <- list(mf1, mf2)
+# 
+# res <- GParetoptim(model = model, fn = MOP2, crit = "EHI", nsteps = 25,lower = 0, upper = 1, critcontrol = list(refPoint = c(2, 2)))
+# plotGPareto(res)
+# res<-easyGParetoptim(fn = MOP2, budget = 100, lower = c(0,0), upper = c(1,1))
+# plotGPareto(res)
+# 
+# 
+# ###############
+# 
+# DTLZ2 <- function(x, nobj = 3){
+#   if(is.null(dim(x))){
+#     x <- matrix(x, 1) 
+#   }
+#   n <- ncol(x)
+#   
+#   y <- matrix(x[,1:(nobj-1)], nrow(x))
+#   z <- matrix(x[,nobj:n], nrow(x))
+#   
+#   g <- rowSums((z-0.5)^2)
+#   
+#   #   tmp <- c(rev(cumprod(cos(y * pi/2))), 1)
+#   #   tmp2 <- c(1, rev(sin(y * pi/2)))
+#   tmp <- t(apply(cos(y * pi/2), 1, cumprod))
+#   tmp <- cbind(t(apply(tmp, 1, rev)), 1)
+#   
+#   tmp2 <- cbind(1, t(apply(sin(y * pi/2), 1, rev)))
+#   
+#   f <- tmp * tmp2 * (1 + g)
+#   
+# }
+# 
+# y <- matrix(data = x[,1:(3-1)], nrow(x))
+# z <- matrix(x[,3:n], nrow(x))
+# 
+# a<-rbind(rep(1,5),seq(1,5,1))
+# 
+# 
+# 
+# DTLZ2
+# 
+# ZDT2(a)
+# 
+# ?ZDT3()
+# 
+#     
