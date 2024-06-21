@@ -1050,8 +1050,8 @@ trend_nom_s<-bf_nom_CA + bf_nom_OR + bf_nom_WA + plot_layout(axis_titles = "coll
 trend_nom_r / trend_nom_s + plot_annotation(tag_levels = 'A') + plot_layout(guides = "collect")
 
 # Total regional exposure in 2045 when optimizing regionally or by state 
-
-
+bf %>% filter(GW == 56.7) %>% summarise(sumPV = sum(PVsum)/1000000)
+biggerfishR %>% filter(n==62) %>% summarise(sumPV = sum(PV)/1000000)
 
 
 # ## Non-domiNULL# ## Non-dominated Sorting Genetic Algorithm II using a repair function and index based drawing
