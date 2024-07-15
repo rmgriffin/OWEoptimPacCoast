@@ -651,24 +651,28 @@ replifish<-function(n,pops){
   # agree$n<-n
   # agree<-mutate(agree, LCOEMWh = df$LCOE_MWh[match(agree$Var1,df$`Wind farm grid ID`)])
   # agree<-mutate(agree, FishPV = df$Total_fish_USD[match(agree$Var1,df$`Wind farm grid ID`)])
-  selected_wfgridID$id<-seq(1,nrow(selected_wfgridID),1)
-  selected_wfgridID<-pivot_longer(data = selected_wfgridID,cols = !id,values_to = "Wind farm grid ID") %>% dplyr::select(!name)
+  selected_wfgridID$id<-seq(1,nrow(selected_wfgridID),1) # Adds unique id for each pareto point
+  selected_wfgridID<-pivot_longer(data = selected_wfgridID,cols = !id,values_to = "Wind farm grid ID") %>% dplyr::select(!name) # Long format
   
-  # Fisheries exposure at pareto selected sites (sampling approach, sample n from agreement matrix weighted by how often they are selected and calculate an expected value)
+  # Merging fisheries data to pareto points
   dft<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
   dft<-dft %>% dplyr::select(`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD,`Weighted mean LCOE`)
   dft<-as.data.frame(dft)
   
-  selected_wfgridID<-merge(selected_wfgridID,dft,by="Wind farm grid ID")
+  selected_wfgridID<-merge(selected_wfgridID,dft,by="Wind farm grid ID") # Merge
   selected_wfgridID<-unique(selected_wfgridID) # Issue with the duplicate pareto sets command above when n = 1, this catches it
-  LCOEMWh<-mean(selected_wfgridID$`Weighted mean LCOE`)*1000
+  LCOEMWh<-mean(selected_wfgridID$`Weighted mean LCOE`)*1000 # Mean LCOE for the development scenario
   selected_wfgridID$`Weighted mean LCOE`<-NULL
-  selected_wfgridID<-selected_wfgridID %>% dplyr::select(!"Wind farm grid ID") %>% group_by(id) %>%
+  selected_wfgridID<-selected_wfgridID %>% dplyr::select(!"Wind farm grid ID") %>% group_by(id) %>% # Sums exposure per species for a given pareto set 
     summarise(across(everything(), list(sum),.names = "sum_{.col}"))
-  selected_wfgridID<-selected_wfgridID %>% dplyr::select(!id) %>% 
-    summarise(across(everything(), list(mean),.names = "mean_{.col}"))
-  bigfish<-selected_wfgridID %>% pivot_longer(cols = everything(),names_to = "Fishery",values_to = "PV", names_prefix = "mean_sum_")
+  selected_wfgridIDmn<-selected_wfgridID %>% dplyr::select(!id) %>% # Mean exposure per species for all pareto sets
+    summarise(across(everything(), list(mean),.names = "mean_{.col}")) 
+  selected_wfgridIDmd<-selected_wfgridID %>% dplyr::select(!id) %>% # Median exposure per species for all pareto sets
+    summarise(across(everything(), list(median),.names = "median_{.col}")) 
   
+  bigfishmn<-selected_wfgridIDmn %>% pivot_longer(cols = everything(),names_to = "Fishery",values_to = "Mean PV", names_prefix = "mean_sum_")
+  bigfishmd<-selected_wfgridIDmd %>% pivot_longer(cols = everything(),names_to = "Fishery",values_to = "Median PV", names_prefix = "median_sum_")
+  bigfish<-merge(bigfishmn,bigfishmd, by = "Fishery")
   
   # m<-15000 # Highest value for expected values of n
   # bigfish<-data.frame("Dungeness_USD"=rep(NA,m),"At-sea_hake_USD"=rep(NA,m),"Shore_hake_USD"=rep(NA,m),"Market_squid_USD"=rep(NA,m),"Pink_shrimp_USD"=rep(NA,m),"Albacore_USD"=rep(NA,m),"Chinook_USD"=rep(NA,m),"Sablefish_USD"=rep(NA,m),"Spiny_lobster_USD"=rep(NA,m),"LCOEMWh"=rep(NA,m),"Sites"=rep(NA,m))
@@ -698,7 +702,8 @@ replifish<-function(n,pops){
   #   summarise(meanfishPV = mean(PV))
   
   bigfish$n<-n
-  bigfish$PV<-ifelse(bigfish$n==1,bigfish$PV/9,bigfish$PV) # Handles formatting issue with n == 1
+  bigfish$`Mean PV`<-ifelse(bigfish$n==1,bigfish$`Mean PV`/9,bigfish$`Mean PV`) # Handles formatting issue with n == 1
+  bigfish$`Median PV`<-ifelse(bigfish$n==1,bigfish$`Median PV`/9,bigfish$`Median PV`) # Handles formatting issue with n == 1
   bigfish$LCOEMWh<-LCOEMWh
   bigfish$dupes<-dupes
   
@@ -751,7 +756,7 @@ bf_nom<-ggplot(data = biggerfish, aes(x=n*.9, y=PV/1000000, group=Fishery)) + # 
   scale_colour_manual(values = palette) +
   theme_minimal() + 
   labs(x = "Target (GW)", y = "Mean present value ($Mil)", colour = "Fishery") +
-  xlim(c(0,60))
+  xlim(c(0,62))
 
 l_nom<-ggplot(data = biggerfish, aes(x=n*.9, y=LCOEMWh)) + # LCOE expected impact across targets, weird artifacts from lots of pareto sites with high LCOE (TRY MEDIAN)
   geom_line(linewidth = 1)
@@ -766,7 +771,7 @@ bf_perc<-ggplot(data = biggerfish, aes(x=n*.9, y=PVperc, group=Fishery)) + # Per
   scale_colour_manual(values = palette) +
   theme_minimal() + 
   labs(x = "Target (GW)", y = "Percent", colour = "Fishery") +
-  xlim(c(0,60))
+  xlim(c(0,62))
 
 ## CA replicated across many targets
 # Loading data
@@ -782,8 +787,7 @@ df$`Wind farm area (m2)`<-NULL # This isn't a correct calculation, this is actua
 df<-as.data.frame(df)
 df<-df %>% filter(`Wind farm state`=="CA")
 
-ns<-c(seq(1,30,2))
-ns[1]<-2
+ns<-c(seq(5,30,5))
 pop<-rep(1000,length(ns))
 
 system.time(biggerfish<-map2_dfr(ns,pop,replifish))
@@ -830,7 +834,7 @@ bf_nom_CA<-ggplot(data = biggerfish, aes(x=n*.9, y=PV/1000000, group=Fishery)) +
   scale_colour_manual(values = palette) +
   theme_minimal() + 
   labs(x = "Target (GW)", y = "Mean present value ($Mil)", colour = "Fishery") +
-  xlim(c(0,28))
+  xlim(c(0,30))
 
 l_nom<-ggplot(data = biggerfish, aes(x=n*.9, y=LCOEMWh)) + # LCOE expected impact across targets, weird artifacts from lots of pareto sites with high LCOE (TRY MEDIAN)
   geom_line(linewidth = 1)
@@ -845,7 +849,7 @@ bf_perc_CA<-ggplot(data = biggerfish, aes(x=n*.9, y=PVperc, group=Fishery)) + # 
   scale_colour_manual(values = palette) +
   theme_minimal() + 
   labs(x = "Target (GW)", y = "Percent", colour = "Fishery") +
-  xlim(c(0,28))
+  xlim(c(0,30))
 
 ## OR replicated across many targets
 # Loading data
@@ -861,8 +865,7 @@ df$`Wind farm area (m2)`<-NULL # This isn't a correct calculation, this is actua
 df<-as.data.frame(df)
 df<-df %>% filter(`Wind farm state`=="OR")
 
-ns<-c(seq(1,17,2))
-ns[1]<-2
+ns<-c(seq(3,18,3))
 pop<-rep(1000,length(ns))
 
 system.time(biggerfish<-map2_dfr(ns,pop,replifish))
@@ -940,8 +943,7 @@ df$`Wind farm area (m2)`<-NULL # This isn't a correct calculation, this is actua
 df<-as.data.frame(df)
 df<-df %>% filter(`Wind farm state`=="WA")
 
-ns<-c(seq(1,17,2))
-ns[1]<-2
+ns<-c(seq(3,18,3))
 pop<-rep(1000,length(ns))
 
 system.time(biggerfish<-map2_dfr(ns,pop,replifish))
