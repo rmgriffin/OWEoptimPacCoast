@@ -568,6 +568,7 @@ mean(df$LCOE_MWh)
 df %>% group_by(State) %>% 
   summarise(mean = mean(LCOE_MWh), std = sd(LCOE_MWh))
 
+
 ## Region replicated across many targets
 # Loading data
 df<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
@@ -718,10 +719,10 @@ system.time(biggerfish<-map2_dfr(ns,pop,replifish))
 # system.time(biggerfish<-map2(ns,pop,replifish))
 # cagree<-map(biggerfish, pluck, "agree") %>% bind_rows()
 # biggerfish<-map(biggerfish, pluck, "bigfish") %>% bind_rows()
-biggerfish<-biggerfish$bigfish
+biggerfish<-biggerfish$bigfish # Extracts the results of map to a dataframe from a list (not sure why map2_dfr is creating a list)
 
 biggerfish %>% group_by(n) %>% 
-  summarise(sumn = sum(PV), mlcoe = mean(LCOEMWh)) %>% 
+  summarise(SumMean = sum(`Mean PV`), SumMedian = sum(`Median PV`), MeanLCOE = mean(LCOEMWh)) %>% # FIXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
   print(n = 100)
 
 palette <- brewer.pal(n = length(unique(biggerfish$Fishery)), name = "Paired")
@@ -742,35 +743,60 @@ biggerfish$Fishery<-gsub("_", " ",biggerfish$Fishery)
 biggerfish$Fishery<-gsub("\\.", "-",biggerfish$Fishery)
 
 biggerfish<-merge(biggerfish,fishsum,by="Fishery")
-biggerfish$PVperc<-(biggerfish$PV/biggerfish$fishsum)*100
+biggerfish$PVmnperc<-(biggerfish$`Mean PV`/biggerfish$fishsum)*100
+biggerfish$PVmdperc<-(biggerfish$`Median PV`/biggerfish$fishsum)*100
 
 biggerfishR<-biggerfish
 
-bf_nom<-ggplot(data = biggerfish, aes(x=n*.9, y=PV/1000000, group=Fishery)) + # Nominal expected impact across targets
+bf_nom_mn<-ggplot(data = biggerfish, aes(x=n*.9, y=`Mean PV`/1000000, group=Fishery)) + # Nominal expected impact across targets
   geom_line(aes(colour = Fishery), linewidth = 1) +
   #geom_point() + 
   geom_vline(xintercept = 11, linetype = "dashed", color = "grey50", linewidth = 1) +
-  geom_label(aes(x = 11, y = min(PV)/1000000 - diff(range(PV)) * 0.05/1000000, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_label(aes(x = 11, y = min(`Mean PV`)/1000000 - diff(range(`Mean PV`)) * 0.05/1000000, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
   geom_vline(xintercept = 55, linetype = "dashed", color = "grey50", linewidth = 1) +
-  geom_label(aes(x = 55, y = min(PV)/1000000 - diff(range(PV)) * 0.05/1000000, label = "2045 Target"), fill = "white", color = "black") + 
+  geom_label(aes(x = 55, y = min(`Mean PV`)/1000000 - diff(range(`Mean PV`)) * 0.05/1000000, label = "2045 Target"), fill = "white", color = "black") + 
   scale_colour_manual(values = palette) +
   theme_minimal() + 
   labs(x = "Target (GW)", y = "Mean present value ($Mil)", colour = "Fishery") +
   xlim(c(0,62))
 
-l_nom<-ggplot(data = biggerfish, aes(x=n*.9, y=LCOEMWh)) + # LCOE expected impact across targets, weird artifacts from lots of pareto sites with high LCOE (TRY MEDIAN)
-  geom_line(linewidth = 1)
-
-bf_perc<-ggplot(data = biggerfish, aes(x=n*.9, y=PVperc, group=Fishery)) + # Percent expected impact across targets
+bf_nom_md<-ggplot(data = biggerfish, aes(x=n*.9, y=`Median PV`/1000000, group=Fishery)) + # Nominal expected impact across targets
   geom_line(aes(colour = Fishery), linewidth = 1) +
   #geom_point() + 
   geom_vline(xintercept = 11, linetype = "dashed", color = "grey50", linewidth = 1) +
-  geom_label(aes(x = 11, y = min(PVperc) - diff(range(PVperc)) * 0.05, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_label(aes(x = 11, y = min(`Median PV`)/1000000 - diff(range(`Median PV`)) * 0.05/1000000, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
   geom_vline(xintercept = 55, linetype = "dashed", color = "grey50", linewidth = 1) +
-  geom_label(aes(x = 55, y = min(PVperc) - diff(range(PVperc)) * 0.05, label = "2045 Target"), fill = "white", color = "black") + 
+  geom_label(aes(x = 55, y = min(`Median PV`)/1000000 - diff(range(`Median PV`)) * 0.05/1000000, label = "2045 Target"), fill = "white", color = "black") + 
   scale_colour_manual(values = palette) +
   theme_minimal() + 
-  labs(x = "Target (GW)", y = "Percent", colour = "Fishery") +
+  labs(x = "Target (GW)", y = "Median present value ($Mil)", colour = "Fishery") +
+  xlim(c(0,62))
+
+l_nom<-ggplot(data = biggerfish, aes(x=n*.9, y=LCOEMWh)) + # LCOE expected impact across targets, weird artifacts from lots of pareto sites with high LCOE (TRY MEDIAN)
+  geom_line(linewidth = 1)
+
+bf_perc_mn<-ggplot(data = biggerfish, aes(x=n*.9, y=PVmnperc, group=Fishery)) + # Percent expected impact across targets
+  geom_line(aes(colour = Fishery), linewidth = 1) +
+  #geom_point() + 
+  geom_vline(xintercept = 11, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 11, y = min(PVmnperc) - diff(range(PVmnperc)) * 0.05, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 55, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 55, y = min(PVmnperc) - diff(range(PVmnperc)) * 0.05, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Mean Percent", colour = "Fishery") +
+  xlim(c(0,62))
+
+bf_perc_md<-ggplot(data = biggerfish, aes(x=n*.9, y=PVmdperc, group=Fishery)) + # Percent expected impact across targets
+  geom_line(aes(colour = Fishery), linewidth = 1) +
+  #geom_point() + 
+  geom_vline(xintercept = 11, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 11, y = min(PVmdperc) - diff(range(PVmdperc)) * 0.05, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 55, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 55, y = min(PVmdperc) - diff(range(PVmdperc)) * 0.05, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Mean Percent", colour = "Fishery") +
   xlim(c(0,62))
 
 ## CA replicated across many targets
