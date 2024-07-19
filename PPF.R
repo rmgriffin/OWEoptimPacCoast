@@ -1183,28 +1183,25 @@ bf_perc_mds<-ggplot(data = bf_comb, aes(x=GW, y=PVpercsum_md, group=Fishery)) + 
   labs(x = "Target (GW)", y = "Mean present value ($Mil)", colour = "Fishery") +
   xlim(c(0,60))
 
-# design<-"AAABBB
-#          CCDDEE"
-
 bf_nom_md<-bf_nom_md + labs(y = "Median present value exposed ($Mil)")
 bf_nom_mdCA<-bf_nom_mdCA + labs(y = "Median present value exposed ($Mil)")
 bf_nom_mdOR<-bf_nom_mdOR + labs(y = "Median present value exposed ($Mil)")
 bf_nom_mds<-bf_nom_mds + labs(y = "Median present value exposed ($Mil)")
 bf_nom_mdWA<-bf_nom_mdWA + labs(y = "Median present value exposed ($Mil)")
-bf_nom_mn<-bf_nom_mn + labs(y = "Mean present value exposed ($Mil)")
+bf_nom_mn<-bf_nom_mn + labs(y = "Mean present value exposed ($Mil)") + xlim(c(0,65))
 bf_nom_mnCA<-bf_nom_mnCA + labs(y = "Mean present value exposed ($Mil)")
 bf_nom_mnOR<-bf_nom_mnOR + labs(y = "Mean present value exposed ($Mil)")
-bf_nom_mns<-bf_nom_mns + labs(y = "Mean present value exposed ($Mil)")
+bf_nom_mns<-bf_nom_mns + labs(y = "Mean present value exposed ($Mil)") + xlim(c(0,65))
 bf_nom_mnWA<-bf_nom_mnWA + labs(y = "Mean present value exposed ($Mil)")
 bf_perc_md<-bf_perc_md + labs(y = "Median present value exposed (% of fishery value)")
 bf_perc_mdCA<-bf_perc_mdCA + labs(y = "Median present value exposed (% of fishery value)")
 bf_perc_mdOR<-bf_perc_mdOR + labs(y = "Median present value exposed (% of fishery value)")
 bf_perc_mds<-bf_perc_mds + labs(y = "Median present value exposed (% of fishery value)")
 bf_perc_mdWA<-bf_perc_mdWA + labs(y = "Median present value exposed (% of fishery value)")
-bf_perc_mn<-bf_perc_mn + labs(y = "Mean present value exposed (% of fishery value)")
+bf_perc_mn<-bf_perc_mn + labs(y = "Mean present value exposed (% of fishery value)") + xlim(c(0,65))
 bf_perc_mnCA<-bf_perc_mnCA + labs(y = "Mean present value exposed (% of fishery value)")
 bf_perc_mnOR<-bf_perc_mnOR + labs(y = "Mean present value exposed (% of fishery value)")
-bf_perc_mns<-bf_perc_mns + labs(y = "Mean present value exposed (% of fishery value)")
+bf_perc_mns<-bf_perc_mns + labs(y = "Mean present value exposed (% of fishery value)") + xlim(c(0,65))
 bf_perc_mnWA<-bf_perc_mnWA + labs(y = "Mean present value exposed (% of fishery value)")
 
 # Grouped plots
@@ -1224,6 +1221,79 @@ t_perc_r_mn<-bf_perc_mn + bf_perc_mns + plot_layout(axis_titles = "collect")
 t_perc_s_mn<-bf_perc_mnCA + bf_perc_mnOR + bf_perc_mnWA + plot_layout(axis_titles = "collect")
 t_perc_r_mn / t_perc_s_mn + plot_annotation(tag_levels = 'A') + plot_layout(guides = "collect")
 
+# layout<-"AAABBB
+#          CCDDEE
+#          FFFGGG
+#          HHIIJJ"
+# 
+# layout <- c(
+#   area(t = 1, l = 1, b = 1, r = 3),
+#   area(t = 1, l = 4, b = 1, r = 6),
+#   area(t = 2, l = 1, b = 2, r = 2),
+#   area(t = 2, l = 3, b = 2, r = 4),
+#   area(t = 2, l = 5, b = 2, r = 6),
+#   area(t = 3, l = 1, b = 3, r = 3),
+#   area(t = 3, l = 4, b = 3, r = 6),
+#   area(t = 4, l = 1, b = 4, r = 2),
+#   area(t = 4, l = 3, b = 4, r = 4),
+#   area(t = 4, l = 5, b = 4, r = 6)
+# )
+
+layout<-"ABCDE
+         "
+big_nom_mn<-bf_nom_mn + bf_nom_mns + bf_nom_mnCA + bf_nom_mnOR + bf_nom_mnWA + plot_layout(axis_titles = "collect", design = layout)
+big_perc_mn<-bf_perc_mn + bf_perc_mns + bf_perc_mnCA + bf_perc_mnOR + bf_perc_mnWA + plot_layout(axis_titles = "collect", design = layout)
+(big_nom_mn / big_perc_mn) + plot_layout(guides = "collect") + plot_annotation(tag_levels = 'A')
+
+p4nom<-ggplot(data.frame(l = "Mean present value exposed ($Mil)", x = 1, y = 1)) + # Collecting axes titles across rows https://stackoverflow.com/questions/65291723/merging-two-y-axes-titles-in-patchwork
+  geom_text(aes(x, y, label = l), angle = 90) + 
+  theme_void() +
+  coord_cartesian(clip = "off")
+
+p4perc<-ggplot(data.frame(l = "Mean present value exposed (% of fishery value)", x = 1, y = 1)) + # Collecting axes titles across rows https://stackoverflow.com/questions/65291723/merging-two-y-axes-titles-in-patchwork
+  geom_text(aes(x, y, label = l), angle = 90) + 
+  theme_void() +
+  coord_cartesian(clip = "off")
+
+p5<-ggplot(data.frame(l = bf_nom_mn$labels$x, x = 1, y = 1)) + # Collecting axes titles across rows https://stackoverflow.com/questions/65291723/merging-two-y-axes-titles-in-patchwork
+  geom_text(aes(x, y, label = l), angle = 0) + 
+  theme_void() +
+  coord_cartesian(clip = "off")
+
+bf_nom_mn$labels$y<-bf_nom_mns$labels$y<-bf_nom_mnCA$labels$y<-bf_nom_mnOR$labels$y<-bf_nom_mnWA$labels$y<-""
+bf_nom_mn$labels$x<-bf_nom_mns$labels$x<-bf_nom_mnCA$labels$x<-bf_nom_mnOR$labels$x<-bf_nom_mnWA$labels$x<-""
+bf_perc_mn$labels$y<-bf_perc_mns$labels$y<-bf_perc_mnCA$labels$y<-bf_perc_mnOR$labels$y<-bf_perc_mnWA$labels$y<-""
+bf_perc_mn$labels$x<-bf_perc_mns$labels$x<-bf_perc_mnCA$labels$x<-bf_perc_mnOR$labels$x<-bf_perc_mnWA$labels$x<-""
+
+lay<-"ABBBBBBBBBCCCCCCCCC
+      ABBBBBBBBBCCCCCCCCC
+      ABBBBBBBBBCCCCCCCCC
+      ABBBBBBBBBCCCCCCCCC
+      ABBBBBBBBBCCCCCCCCC
+      ABBBBBBBBBCCCCCCCCC
+      ABBBBBBBBBCCCCCCCCC
+      ABBBBBBBBBCCCCCCCCC
+      ABBBBBBBBBCCCCCCCCC
+      ADDDDDDEEEEEEFFFFFF
+      ADDDDDDEEEEEEFFFFFF
+      ADDDDDDEEEEEEFFFFFF
+      ADDDDDDEEEEEEFFFFFF
+      ADDDDDDEEEEEEFFFFFF
+      ADDDDDDEEEEEEFFFFFF
+      ADDDDDDEEEEEEFFFFFF
+      ADDDDDDEEEEEEFFFFFF
+      ADDDDDDEEEEEEFFFFFF
+      GGGGGGGGGGGGGGGGGGG
+      "
+big_nom_mn<-(p4nom + bf_nom_mn + bf_nom_mns + bf_nom_mnCA + bf_nom_mnOR + bf_nom_mnWA + p5) + plot_layout(design = lay)
+big_perc_mn<-(p4perc + bf_perc_mn + bf_perc_mns + bf_perc_mnCA + bf_perc_mnOR + bf_perc_mnWA + p5) + plot_layout(design = lay)
+(big_nom_mn / big_perc_mn) + plot_layout(guides = "collect") + plot_annotation(tag_levels =  list(c("","A","B","C","D","E","","","F","G","H","I","J",""))) # 1200*1400 export
+
+big_nom_mn<-((bf_nom_mn + bf_nom_mns) / (bf_nom_mnCA + bf_nom_mnOR + bf_nom_mnWA)) + plot_layout(axis_titles = "collect", guides = "collect")
+big_perc_mn<-(bf_perc_mn + bf_perc_mns + bf_perc_mnCA + bf_perc_mnOR + bf_perc_mnWA) + plot_layout(axis_titles = "collect", design = lay)
+
+
+ 
 
 # Total regional exposure in 2045 when optimizing regionally or by state 
 bf %>% filter(GW == 56.7) %>% summarise(sumPV = sum(PVsum)/1000000)
