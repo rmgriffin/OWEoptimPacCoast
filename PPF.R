@@ -670,10 +670,28 @@ replifish<-function(n,pops){
     summarise(across(everything(), list(mean),.names = "mean_{.col}")) 
   selected_wfgridIDmd<-selected_wfgridID %>% dplyr::select(!id) %>% # Median exposure per species for all pareto sets
     summarise(across(everything(), list(median),.names = "median_{.col}")) 
-  
+
+  # Function to calculate confidence interval using t.test
+  calculate_ci <- function(column) {
+    t_result <- t.test(column)
+    lower <- t_result$conf.int[1]
+    upper <- t_result$conf.int[2]
+    
+    # Check for NaN and replace with mean for when there is only a single value in the entire sample
+    if (is.nan(lower)) lower <- as.numeric(t_result$estimate)
+    if (is.nan(upper)) upper <- as.numeric(t_result$estimate)
+    
+    return(c(lower, upper))
+  }
+  ci_df<-as.data.frame(t(sapply(selected_wfgridID[, setdiff(names(selected_wfgridID), "id")], calculate_ci)))
+  colnames(ci_df)<-c("Lower", "Upper")
+  ci_df$Fishery<-rownames(ci_df)
+  ci_df$Fishery<-gsub("sum_", "",ci_df$Fishery)
+
   bigfishmn<-selected_wfgridIDmn %>% pivot_longer(cols = everything(),names_to = "Fishery",values_to = "Mean PV", names_prefix = "mean_sum_")
   bigfishmd<-selected_wfgridIDmd %>% pivot_longer(cols = everything(),names_to = "Fishery",values_to = "Median PV", names_prefix = "median_sum_")
   bigfish<-merge(bigfishmn,bigfishmd, by = "Fishery")
+  bigfish<-merge(bigfish,ci_df,by="Fishery")
   
   # m<-15000 # Highest value for expected values of n
   # bigfish<-data.frame("Dungeness_USD"=rep(NA,m),"At-sea_hake_USD"=rep(NA,m),"Shore_hake_USD"=rep(NA,m),"Market_squid_USD"=rep(NA,m),"Pink_shrimp_USD"=rep(NA,m),"Albacore_USD"=rep(NA,m),"Chinook_USD"=rep(NA,m),"Sablefish_USD"=rep(NA,m),"Spiny_lobster_USD"=rep(NA,m),"LCOEMWh"=rep(NA,m),"Sites"=rep(NA,m))
@@ -721,9 +739,9 @@ system.time(biggerfish<-map2_dfr(ns,pop,replifish))
 # biggerfish<-map(biggerfish, pluck, "bigfish") %>% bind_rows()
 biggerfish<-biggerfish$bigfish # Extracts the results of map to a dataframe from a list (not sure why map2_dfr is creating a list)
 
-biggerfish %>% group_by(n) %>% 
-  summarise(SumMean = sum(`Mean PV`), SumMedian = sum(`Median PV`), MeanLCOE = mean(LCOEMWh)) %>% 
-  print(n = 100)
+# biggerfish %>% group_by(n) %>% 
+#   summarise(SumMean = sum(`Mean PV`), SumMedian = sum(`Median PV`), MeanLCOE = mean(LCOEMWh)) %>% 
+#   print(n = 100)
 
 palette <- brewer.pal(n = length(unique(biggerfish$Fishery)), name = "Paired")
 
@@ -745,6 +763,8 @@ biggerfish$Fishery<-gsub("\\.", "-",biggerfish$Fishery)
 biggerfish<-merge(biggerfish,fishsum,by="Fishery")
 biggerfish$PVmnperc<-(biggerfish$`Mean PV`/biggerfish$fishsum)*100
 biggerfish$PVmdperc<-(biggerfish$`Median PV`/biggerfish$fishsum)*100
+biggerfish$PVlperc<-(biggerfish$Lower/biggerfish$fishsum)*100
+biggerfish$PVuperc<-(biggerfish$Upper/biggerfish$fishsum)*100
 
 biggerfishR<-biggerfish
 
@@ -797,6 +817,34 @@ bf_perc_md<-ggplot(data = biggerfish, aes(x=n*.9, y=PVmdperc, group=Fishery)) + 
   scale_colour_manual(values = palette) +
   theme_minimal() + 
   labs(x = "Target (GW)", y = "Median Percent", colour = "Fishery") +
+  xlim(c(0,62))
+
+ci_bf_nom_mn<-ggplot(data = biggerfish, aes(x=n*.9, y=`Mean PV`/1000000, group=Fishery, color = Fishery, fill = Fishery)) + # Nominal expected impact across targets
+  geom_line(linewidth = 1) +
+  geom_ribbon(aes(ymin = Lower/1000000, ymax = Upper/1000000),linetype=2, alpha=0.3) +
+  #geom_point() + 
+  geom_vline(xintercept = 11, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 11, y = min(`Mean PV`)/1000000 - diff(range(`Mean PV`)) * 0.05/1000000, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 55, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 55, y = min(`Mean PV`)/1000000 - diff(range(`Mean PV`)) * 0.05/1000000, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  scale_fill_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Mean present value ($Mil)", colour = "Fishery") +
+  xlim(c(0,62))
+
+ci_bf_perc_mn<-ggplot(data = biggerfish, aes(x=n*.9, y=PVmnperc, group=Fishery, color = Fishery, fill = Fishery)) + # Nominal expected impact across targets
+  geom_line(linewidth = 1) +
+  geom_ribbon(aes(ymin = PVlperc, ymax = PVuperc),linetype=2, alpha=0.3) +
+  #geom_point() + 
+  geom_vline(xintercept = 11, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 11, y = min(PVmnperc) - diff(range(PVmnperc)) * 0.05, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 55, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 55, y = min(PVmnperc) - diff(range(PVmnperc)) * 0.05, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  scale_fill_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Mean Percent", colour = "Fishery") +
   xlim(c(0,62))
 
 ## CA replicated across many targets
@@ -902,6 +950,34 @@ bf_perc_mdCA<-ggplot(data = biggerfish, aes(x=n*.9, y=PVmdperc, group=Fishery)) 
   labs(x = "Target (GW)", y = "Median Percent", colour = "Fishery") +
   xlim(c(0,30))
 
+ci_bf_nom_mnCA<-ggplot(data = biggerfish, aes(x=n*.9, y=`Mean PV`/1000000, group=Fishery, color = Fishery, fill = Fishery)) + # Nominal expected impact across targets
+  geom_line(linewidth = 1) +
+  geom_ribbon(aes(ymin = Lower/1000000, ymax = Upper/1000000),linetype=2, alpha=0.3) +
+  #geom_point() + 
+  geom_vline(xintercept = 5, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 5, y = min(`Mean PV`)/1000000 - diff(range(`Mean PV`)) * 0.05/1000000, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 25, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 25, y = min(`Mean PV`)/1000000 - diff(range(`Mean PV`)) * 0.05/1000000, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  scale_fill_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Mean present value ($Mil)", colour = "Fishery") +
+  xlim(c(0,30))
+
+ci_bf_perc_mnCA<-ggplot(data = biggerfish, aes(x=n*.9, y=PVmnperc, group=Fishery, color = Fishery, fill = Fishery)) + # Nominal expected impact across targets
+  geom_line(linewidth = 1) +
+  geom_ribbon(aes(ymin = PVlperc, ymax = PVuperc),linetype=2, alpha=0.3) +
+  #geom_point() + 
+  geom_vline(xintercept = 5, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 5, y = min(PVmnperc) - diff(range(PVmnperc)) * 0.05, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 25, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 25, y = min(PVmnperc) - diff(range(PVmnperc)) * 0.05, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  scale_fill_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Mean Percent", colour = "Fishery") +
+  xlim(c(0,30))
+
 ## OR replicated across many targets
 # Loading data
 df<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
@@ -1005,6 +1081,34 @@ bf_perc_mdOR<-ggplot(data = biggerfish, aes(x=n*.9, y=PVmdperc, group=Fishery)) 
   labs(x = "Target (GW)", y = "Median Percent", colour = "Fishery") +
   xlim(c(0,18))
 
+ci_bf_nom_mnOR<-ggplot(data = biggerfish, aes(x=n*.9, y=`Mean PV`/1000000, group=Fishery, color = Fishery, fill = Fishery)) + # Nominal expected impact across targets
+  geom_line(linewidth = 1) +
+  geom_ribbon(aes(ymin = Lower/1000000, ymax = Upper/1000000),linetype=2, alpha=0.3) +
+  #geom_point() + 
+  geom_vline(xintercept = 3, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 3, y = min(`Mean PV`)/1000000 - diff(range(`Mean PV`)) * 0.05/1000000, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 15, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 15, y = min(`Mean PV`)/1000000 - diff(range(`Mean PV`)) * 0.05/1000000, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  scale_fill_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Mean present value ($Mil)", colour = "Fishery") +
+  xlim(c(0,18))
+
+ci_bf_perc_mnOR<-ggplot(data = biggerfish, aes(x=n*.9, y=PVmnperc, group=Fishery, color = Fishery, fill = Fishery)) + # Nominal expected impact across targets
+  geom_line(linewidth = 1) +
+  geom_ribbon(aes(ymin = PVlperc, ymax = PVuperc),linetype=2, alpha=0.3) +
+  #geom_point() + 
+  geom_vline(xintercept = 3, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 3, y = min(PVmnperc) - diff(range(PVmnperc)) * 0.05, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 15, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 15, y = min(PVmnperc) - diff(range(PVmnperc)) * 0.05, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  scale_fill_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Mean Percent", colour = "Fishery") +
+  xlim(c(0,18))
+
 ## WA replicated across many targets
 # Loading data
 df<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
@@ -1106,6 +1210,34 @@ bf_perc_mdWA<-ggplot(data = biggerfish, aes(x=n*.9, y=PVmdperc, group=Fishery)) 
   scale_colour_manual(values = palette) +
   theme_minimal() + 
   labs(x = "Target (GW)", y = "Median Percent", colour = "Fishery") +
+  xlim(c(0,18))
+
+ci_bf_nom_mnWA<-ggplot(data = biggerfish, aes(x=n*.9, y=`Mean PV`/1000000, group=Fishery, color = Fishery, fill = Fishery)) + # Nominal expected impact across targets
+  geom_line(linewidth = 1) +
+  geom_ribbon(aes(ymin = Lower/1000000, ymax = Upper/1000000),linetype=2, alpha=0.3) +
+  #geom_point() + 
+  geom_vline(xintercept = 3, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 3, y = min(`Mean PV`)/1000000 - diff(range(`Mean PV`)) * 0.05/1000000, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 15, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 15, y = min(`Mean PV`)/1000000 - diff(range(`Mean PV`)) * 0.05/1000000, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  scale_fill_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Mean present value ($Mil)", colour = "Fishery") +
+  xlim(c(0,18))
+
+ci_bf_perc_mnWA<-ggplot(data = biggerfish, aes(x=n*.9, y=PVmnperc, group=Fishery, color = Fishery, fill = Fishery)) + # Nominal expected impact across targets
+  geom_line(linewidth = 1) +
+  geom_ribbon(aes(ymin = PVlperc, ymax = PVuperc),linetype=2, alpha=0.3) +
+  #geom_point() + 
+  geom_vline(xintercept = 3, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 3, y = min(PVmnperc) - diff(range(PVmnperc)) * 0.05, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 15, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 15, y = min(PVmnperc) - diff(range(PVmnperc)) * 0.05, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  scale_fill_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Mean Percent", colour = "Fishery") +
   xlim(c(0,18))
 
 ## Gathering figures (EDIT)
