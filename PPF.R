@@ -895,6 +895,8 @@ biggerfish$Fishery<-gsub("\\.", "-",biggerfish$Fishery)
 biggerfish<-merge(biggerfish,fishsum,by="Fishery")
 biggerfish$PVmnperc<-(biggerfish$`Mean PV`/biggerfish$fishsum)*100
 biggerfish$PVmdperc<-(biggerfish$`Median PV`/biggerfish$fishsum)*100
+biggerfish$PVlperc<-(biggerfish$Lower/biggerfish$fishsum)*100
+biggerfish$PVuperc<-(biggerfish$Upper/biggerfish$fishsum)*100
 biggerfish<-biggerfish %>% mutate(across(everything(), ~replace(.x, is.nan(.x), 0))) # Some species with no harvest in state waters introduces a NaN when dividing 0 by 0
 
 biggerfishCA<-biggerfish
@@ -1025,7 +1027,9 @@ biggerfish$Fishery<-gsub("\\.", "-",biggerfish$Fishery)
 
 biggerfish<-merge(biggerfish,fishsum,by="Fishery")
 biggerfish$PVmnperc<-(biggerfish$`Mean PV`/biggerfish$fishsum)*100
-biggerfish$PVmdperc<-(biggerfish$`Median PV`/biggerfish$fishsum)*100 
+biggerfish$PVmdperc<-(biggerfish$`Median PV`/biggerfish$fishsum)*100
+biggerfish$PVlperc<-(biggerfish$Lower/biggerfish$fishsum)*100
+biggerfish$PVuperc<-(biggerfish$Upper/biggerfish$fishsum)*100
 biggerfish<-biggerfish %>% mutate(across(everything(), ~replace(.x, is.nan(.x), 0))) # Some species with no harvest in state waters introduces a NaN when dividing 0 by 0
 
 biggerfishOR<-biggerfish
@@ -1157,6 +1161,8 @@ biggerfish$Fishery<-gsub("\\.", "-",biggerfish$Fishery)
 biggerfish<-merge(biggerfish,fishsum,by="Fishery")
 biggerfish$PVmnperc<-(biggerfish$`Mean PV`/biggerfish$fishsum)*100
 biggerfish$PVmdperc<-(biggerfish$`Median PV`/biggerfish$fishsum)*100
+biggerfish$PVlperc<-(biggerfish$Lower/biggerfish$fishsum)*100
+biggerfish$PVuperc<-(biggerfish$Upper/biggerfish$fishsum)*100
 biggerfish<-biggerfish %>% mutate(across(everything(), ~replace(.x, is.nan(.x), 0))) # Some species with no harvest in state waters introduces a NaN when dividing 0 by 0
 
 biggerfishWA<-biggerfish
@@ -1240,7 +1246,7 @@ ci_bf_perc_mnWA<-ggplot(data = biggerfish, aes(x=n*.9, y=PVmnperc, group=Fishery
   labs(x = "Target (GW)", y = "Mean Percent", colour = "Fishery") +
   xlim(c(0,18))
 
-## Gathering figures (EDIT)
+## Gathering figures
 # Combined figure - adds up exposure when forced to develop to targets within state-adjacent waters
 biggerfishCA$state<-"CA"
 biggerfishOR$state<-"OR"
@@ -1254,10 +1260,12 @@ biggerfishcomb$id<-ifelse(biggerfishcomb$n==3&biggerfishcomb$state %in% c("OR","
                                                ifelse(biggerfishcomb$n==15&biggerfishcomb$state %in% c("OR","WA") | biggerfishcomb$n==25&biggerfishcomb$state %in% c("CA"),5,
                                                       ifelse(biggerfishcomb$n==18&biggerfishcomb$state %in% c("OR","WA") | biggerfishcomb$n==30&biggerfishcomb$state %in% c("CA"),6,NA))))))
 
+biggerfishcomb$CIradius<-biggerfishcomb$`Mean PV` - biggerfishcomb$Lower # https://stats.stackexchange.com/questions/223924/how-to-add-up-partial-confidence-intervals-to-create-a-total-confidence-interval
+
 # Sum by group
 bf_comb<-biggerfishcomb %>% 
   group_by(id,Fishery) %>% 
-  summarise(PVnomsum_mn = sum(`Mean PV`),PVnomsum_md = sum(`Median PV`),GW = sum(n)*.9) %>% 
+  summarise(PVnomsum_mn = sum(`Mean PV`),PVnomsum_md = (sum(`Median PV`)^.5), PVCI = (sum(CIradius^2))^.5, GW = sum(n)*.9) %>% 
   as.data.frame()
 
 # Have percentages be expressed as percent of regional fishery value, not summed state percentages
@@ -1265,6 +1273,12 @@ rfv<-biggerfishR %>% dplyr::select(Fishery,fishsum) %>% distinct()
 bf_comb<-merge(bf_comb,rfv,by = "Fishery")
 bf_comb$PVpercsum_mn<-(bf_comb$PVnomsum_mn/bf_comb$fishsum)*100
 bf_comb$PVpercsum_md<-(bf_comb$PVnomsum_md/bf_comb$fishsum)*100
+
+# Confidence intervals
+bf_comb$Lower<-bf_comb$PVnomsum_mn-bf_comb$PVCI
+bf_comb$Upper<-bf_comb$PVnomsum_mn+bf_comb$PVCI
+bf_comb$PVlperc<-bf_comb$PVpercsum_mn-((bf_comb$PVCI/bf_comb$fishsum)*100)
+bf_comb$PVuperc<-bf_comb$PVpercsum_mn+((bf_comb$PVCI/bf_comb$fishsum)*100)
 
 # Plots
 bf_nom_mns<-ggplot(data = bf_comb, aes(x=GW, y=PVnomsum_mn/1000000, group=Fishery)) + # Nominal expected impact across targets
@@ -1315,6 +1329,35 @@ bf_perc_mds<-ggplot(data = bf_comb, aes(x=GW, y=PVpercsum_md, group=Fishery)) + 
   labs(x = "Target (GW)", y = "Mean present value ($Mil)", colour = "Fishery") +
   xlim(c(0,60))
 
+ci_bf_nom_mns<-ggplot(data = bf_comb, aes(x=GW, y=PVnomsum_mn/1000000, group=Fishery, color = Fishery, fill = Fishery)) + # Nominal expected impact across targets
+  geom_line(linewidth = 1) +
+  geom_ribbon(aes(ymin = Lower/1000000, ymax = Upper/1000000),linetype=2, alpha=0.3) +
+  #geom_point() + 
+  geom_vline(xintercept = 11, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 11, y = min(PVnomsum_mn)/1000000 - diff(range(PVnomsum_mn)) * 0.05/1000000, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 55, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 55, y = min(PVnomsum_mn)/1000000 - diff(range(PVnomsum_mn)) * 0.05/1000000, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  scale_fill_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Mean present value ($Mil)", colour = "Fishery") +
+  xlim(c(0,60))
+
+ci_bf_perc_mns<-ggplot(data = bf_comb, aes(x=GW, y=PVpercsum_mn, group=Fishery, color = Fishery, fill = Fishery)) + # Nominal expected impact across targets
+  geom_line(linewidth = 1) +
+  geom_ribbon(aes(ymin = PVlperc, ymax = PVuperc),linetype=2, alpha=0.3) +
+  #geom_point() + 
+  geom_vline(xintercept = 11, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 11, y = min(PVpercsum_mn) - diff(range(PVpercsum_mn)) * 0.05, label = "2030 Target"), fill = "white", color = "black") + # Label below the x axis
+  geom_vline(xintercept = 55, linetype = "dashed", color = "grey50", linewidth = 1) +
+  geom_label(aes(x = 55, y = min(PVpercsum_mn) - diff(range(PVpercsum_mn)) * 0.05, label = "2045 Target"), fill = "white", color = "black") + 
+  scale_colour_manual(values = palette) +
+  scale_fill_manual(values = palette) +
+  theme_minimal() + 
+  labs(x = "Target (GW)", y = "Mean Percent", colour = "Fishery") +
+  xlim(c(0,60))
+
+# Relabeling plots
 bf_nom_md<-bf_nom_md + labs(y = "Median present value exposed ($Mil)")
 bf_nom_mdCA<-bf_nom_mdCA + labs(y = "Median present value exposed ($Mil)")
 bf_nom_mdOR<-bf_nom_mdOR + labs(y = "Median present value exposed ($Mil)")
@@ -1336,6 +1379,17 @@ bf_perc_mnOR<-bf_perc_mnOR + labs(y = "Mean present value exposed (% of fishery 
 bf_perc_mns<-bf_perc_mns + labs(y = "Mean present value exposed (% of fishery value)") + xlim(c(0,65))
 bf_perc_mnWA<-bf_perc_mnWA + labs(y = "Mean present value exposed (% of fishery value)")
 
+ci_bf_nom_mn<-ci_bf_nom_mn + labs(y = "Mean present value exposed ($Mil)") + xlim(c(0,65))
+ci_bf_nom_mnCA<-ci_bf_nom_mnCA + labs(y = "Mean present value exposed ($Mil)")
+ci_bf_nom_mnOR<-ci_bf_nom_mnOR + labs(y = "Mean present value exposed ($Mil)")
+ci_bf_nom_mns<-ci_bf_nom_mns + labs(y = "Mean present value exposed ($Mil)") + xlim(c(0,65))
+ci_bf_nom_mnWA<-ci_bf_nom_mnWA + labs(y = "Mean present value exposed ($Mil)")
+ci_bf_perc_mn<-ci_bf_perc_mn + labs(y = "Mean present value exposed (% of fishery value)") + xlim(c(0,65))
+ci_bf_perc_mnCA<-ci_bf_perc_mnCA + labs(y = "Mean present value exposed (% of fishery value)")
+ci_bf_perc_mnOR<-ci_bf_perc_mnOR + labs(y = "Mean present value exposed (% of fishery value)")
+ci_bf_perc_mns<-ci_bf_perc_mns + labs(y = "Mean present value exposed (% of fishery value)") + xlim(c(0,65))
+ci_bf_perc_mnWA<-ci_bf_perc_mnWA + labs(y = "Mean present value exposed (% of fishery value)")
+
 # Grouped plots
 t_nom_r_mn<-bf_nom_mn + bf_nom_mns + plot_layout(axis_titles = "collect") 
 t_nom_s_mn<-bf_nom_mnCA + bf_nom_mnOR + bf_nom_mnWA + plot_layout(axis_titles = "collect")
@@ -1352,6 +1406,16 @@ t_perc_r_md / t_perc_s_md + plot_annotation(tag_levels = 'A') + plot_layout(guid
 t_perc_r_mn<-bf_perc_mn + bf_perc_mns + plot_layout(axis_titles = "collect") 
 t_perc_s_mn<-bf_perc_mnCA + bf_perc_mnOR + bf_perc_mnWA + plot_layout(axis_titles = "collect")
 t_perc_r_mn / t_perc_s_mn + plot_annotation(tag_levels = 'A') + plot_layout(guides = "collect")
+
+ci_t_nom_r_mn<-ci_bf_nom_mn + ci_bf_nom_mns + plot_layout(axis_titles = "collect") 
+ci_t_nom_s_mn<-ci_bf_nom_mnCA + ci_bf_nom_mnOR + ci_bf_nom_mnWA + plot_layout(axis_titles = "collect")
+ci_t_nom_r_mn / ci_t_nom_s_mn + plot_annotation(tag_levels = 'A') + plot_layout(guides = "collect")
+
+ci_t_perc_r_mn<-ci_bf_perc_mn + ci_bf_perc_mns + plot_layout(axis_titles = "collect") 
+ci_t_perc_s_mn<-ci_bf_perc_mnCA + ci_bf_perc_mnOR + ci_bf_perc_mnWA + plot_layout(axis_titles = "collect")
+ci_t_perc_r_mn / ci_t_perc_s_mn + plot_annotation(tag_levels = 'A') + plot_layout(guides = "collect")
+
+# Combined groups plot
 
 # layout<-"AAABBB
 #          CCDDEE
@@ -1424,12 +1488,9 @@ big_perc_mn<-(p4perc + bf_perc_mn + bf_perc_mns + bf_perc_mnCA + bf_perc_mnOR + 
 big_nom_mn<-((bf_nom_mn + bf_nom_mns) / (bf_nom_mnCA + bf_nom_mnOR + bf_nom_mnWA)) + plot_layout(axis_titles = "collect", guides = "collect")
 big_perc_mn<-(bf_perc_mn + bf_perc_mns + bf_perc_mnCA + bf_perc_mnOR + bf_perc_mnWA) + plot_layout(axis_titles = "collect", design = lay)
 
-
- 
-
-# Total regional exposure in 2045 when optimizing regionally or by state 
-bf %>% filter(GW == 56.7) %>% summarise(sumPV = sum(PVsum)/1000000)
-biggerfishR %>% filter(n==62) %>% summarise(sumPV = sum(PV)/1000000)
+## Total regional exposure in 2045 when optimizing regionally or by state 
+bf_comb %>% filter(GW == 59.4) %>% summarise(sumPV = sum(PVnomsum_mn)/1000000)
+biggerfishR %>% filter(n==62) %>% summarise(sumPV = sum(`Mean PV`)/1000000)
 
 
 # ## Non-domiNULL# ## Non-dominated Sorting Genetic Algorithm II using a repair function and index based drawing
