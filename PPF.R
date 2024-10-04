@@ -21,18 +21,172 @@ rm(p,PKG)
 
 options(scipen=999) # Prevent scientific notation
 
+## Multi-objective optimization function. Non-dominated Sorting Genetic Algorithm II using binary based drawing and a repair function to set constraint (penalties and the constraint function don't seem to work)
+replifish<-function(n,pops){
+  transform_vector_to_exact_ones <- function(v, num_ones) { # Sets constraint by forcing the NSGA2 draws to generate exactly n ones and (D - n) zeros
+    # Length of the input vector
+    l <- length(v)
+    
+    # Create a vector of zeros
+    transformed_v <- rep(0, l)
+    
+    # Find indices of the top num_ones values
+    top_indices <- order(v, decreasing = TRUE)[1:num_ones]
+    
+    # Set these positions to 1
+    transformed_v[top_indices] <- 1
+    
+    return(transformed_v)
+  }
+  
+  # z<-runif(nrow(df),0,1) test vector
+  
+  main.goal1<-function(x){    # x - a vector of indicator variables
+    return(sum(transform_vector_to_exact_ones(x,num_ones = n)*df$Total_fish_USD))}
+  
+  main.goal2<-function(x){    # x - a vector of indicator variables
+    return(sum(transform_vector_to_exact_ones(x,num_ones = n)*df$LCOE_MWh*df$`Total MWhyraw`)/sum(transform_vector_to_exact_ones(x,num_ones = n)*df$`Total MWhyraw`))} # Weighted average of LCOE, weighted by energy production
+  
+  eval<-function(x){
+    return(c(main.goal1(x),main.goal2(x)))} # objective function
+  
+  D<-as.numeric(nrow(df)) # Number of values in the function must equal D
+  #n<-63 # Number of cells
+  
+  system.time(G<-nsga2(fn=eval,
+                       idim=D, # Length of the subset of indices drawn by nsga2 through the eval fn
+                       odim=2, # Output dimensions
+                       lower.bounds=rep(0,nrow(df)),
+                       upper.bounds=rep(1,nrow(df)),
+                       popsize=pops,generations=10000, cprob = 0.7, cdist = 5,
+                       mprob = 0.2, mdist = 10))
+  
+  # Identifying pareto sets after optimization
+  pareto_indices <- which(G$pareto.optimal == TRUE)
+  pareto_solutions <- cbind(as.data.frame(G$value),G$pareto.optimal)
+  names(pareto_solutions) <- c("Sum fishing PV ($Mil)", "Mean LCOE ($/MWh)", "Pareto") # Rename columns
+  pareto_solutions<-pareto_solutions[pareto_solutions$Pareto=="TRUE",]
+  pareto_solutions$Pareto<-NULL
+  pareto_solutions<-unique(pareto_solutions)
+  
+  
+  transform_row_to_exact_ones <- function(row, num_ones) { # Same as vector version above, but for a matrix
+    l <- length(row)
+    transformed_row <- rep(0, l)
+    top_indices <- order(row, decreasing = TRUE)[1:num_ones]
+    transformed_row[top_indices] <- 1
+    return(transformed_row)
+  }
+  
+  idim_par<-t(apply(G$par, 1, transform_row_to_exact_ones, num_ones = n))
+  
+  idim_par<-as.data.frame(idim_par[pareto_indices,])
+  find_ones_positions <- function(row) {
+    return(which(row == 1))
+  }
+  selected_rows<-t(apply(idim_par,MARGIN = 1, find_ones_positions)) # Lists of selected rows from initial df for pareto sets
+  dupes<-as.numeric(nrow(selected_rows)-nrow(unique(selected_rows)))
+  selected_rows<-unique(selected_rows) # NSGA2 can produce duplicate pareto sets
+  selected_wfgridID<-as.data.frame(selected_rows) %>%
+    rowwise() %>%
+    mutate(across(everything(), ~df$`Wind farm grid ID`[.x])) %>%
+    ungroup()
+  # agree<-as.data.frame(table(as.matrix(selected_wfgridID)))
+  # agree$Var1<-as.numeric(levels(agree$Var1))[agree$Var1] # https://stackoverflow.com/questions/3418128/how-to-convert-a-factor-to-integer-numeric-without-loss-of-information
+  # agree$prob<-agree$Freq/sum(agree$Freq)
+  # agree$n<-n
+  # agree<-mutate(agree, LCOEMWh = df$LCOE_MWh[match(agree$Var1,df$`Wind farm grid ID`)])
+  # agree<-mutate(agree, FishPV = df$Total_fish_USD[match(agree$Var1,df$`Wind farm grid ID`)])
+  selected_wfgridID$id<-seq(1,nrow(selected_wfgridID),1) # Adds unique id for each pareto point
+  selected_wfgridID<-pivot_longer(data = selected_wfgridID,cols = !id,values_to = "Wind farm grid ID") %>% dplyr::select(!name) # Long format
+  
+  # Merging fisheries data to pareto points
+  dft<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
+  dft<-dft %>% dplyr::select(`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD,`Weighted mean LCOE`,`Total MWhyraw`)
+  dft<-as.data.frame(dft)
+  
+  selected_wfgridID<-merge(selected_wfgridID,dft,by="Wind farm grid ID") # Merge
+  selected_wfgridID<-unique(selected_wfgridID) # Issue with the duplicate pareto sets command above when n = 1, this catches it
+  selected_wfgridID$costofenergy<-selected_wfgridID$`Weighted mean LCOE`*selected_wfgridID$`Total MWhyraw`
+  LCOEMWh<-sum(selected_wfgridID$costofenergy)/sum(selected_wfgridID$`Total MWhyraw`)*1000 # Mean LCOE for the development scenario (energy production weighted)
+  s_ids<-selected_wfgridID # Saves selected pareto sets with ids to a dataframe for return
+  s_ids$n<-n
+  
+  selected_wfgridID$`Weighted mean LCOE`<-NULL
+  selected_wfgridID$`Total MWhyraw`<-NULL
+  selected_wfgridID$costofenergy<-NULL
+  selected_wfgridID<-selected_wfgridID %>% dplyr::select(!"Wind farm grid ID") %>% group_by(id) %>% # Sums exposure per species for a given pareto set 
+    summarise(across(everything(), list(sum),.names = "sum_{.col}"))
+  selected_wfgridIDmn<-selected_wfgridID %>% dplyr::select(!id) %>% # Mean exposure per species for all pareto sets
+    summarise(across(everything(), list(mean),.names = "mean_{.col}")) 
+  selected_wfgridIDmd<-selected_wfgridID %>% dplyr::select(!id) %>% # Median exposure per species for all pareto sets
+    summarise(across(everything(), list(median),.names = "median_{.col}")) 
+  
+  # Function to calculate confidence interval using t.test
+  calculate_ci <- function(column) {
+    t_result <- t.test(column)
+    lower <- t_result$conf.int[1]
+    upper <- t_result$conf.int[2]
+    
+    # Check for NaN and replace with mean for when there is only a single value in the entire sample
+    if (is.nan(lower)) lower <- as.numeric(t_result$estimate)
+    if (is.nan(upper)) upper <- as.numeric(t_result$estimate)
+    
+    return(c(lower, upper))
+  }
+  ci_df<-as.data.frame(t(sapply(selected_wfgridID[, setdiff(names(selected_wfgridID), "id")], calculate_ci)))
+  colnames(ci_df)<-c("Lower", "Upper")
+  ci_df$Fishery<-rownames(ci_df)
+  ci_df$Fishery<-gsub("sum_", "",ci_df$Fishery)
+  
+  bigfishmn<-selected_wfgridIDmn %>% pivot_longer(cols = everything(),names_to = "Fishery",values_to = "Mean PV", names_prefix = "mean_sum_")
+  bigfishmd<-selected_wfgridIDmd %>% pivot_longer(cols = everything(),names_to = "Fishery",values_to = "Median PV", names_prefix = "median_sum_")
+  bigfish<-merge(bigfishmn,bigfishmd, by = "Fishery")
+  bigfish<-merge(bigfish,ci_df,by="Fishery")
+  
+  # m<-15000 # Highest value for expected values of n
+  # bigfish<-data.frame("Dungeness_USD"=rep(NA,m),"At-sea_hake_USD"=rep(NA,m),"Shore_hake_USD"=rep(NA,m),"Market_squid_USD"=rep(NA,m),"Pink_shrimp_USD"=rep(NA,m),"Albacore_USD"=rep(NA,m),"Chinook_USD"=rep(NA,m),"Sablefish_USD"=rep(NA,m),"Spiny_lobster_USD"=rep(NA,m),"LCOEMWh"=rep(NA,m),"Sites"=rep(NA,m))
+  # for(j in 1:m){ # Sums species PV for a drawn sample of size n and iterates across samples while tracking draws in "Sites" column
+  #   s_agree<-sample(agree$Var1,n,replace = FALSE,prob = agree$prob)
+  #   fishroll<-data.frame("Dungeness_USD"=rep(NA,n),"At-sea_hake_USD"=rep(NA,n),"Shore_hake_USD"=rep(NA,n),"Market_squid_USD"=rep(NA,n),"Pink_shrimp_USD"=rep(NA,n),"Albacore_USD"=rep(NA,n),"Chinook_USD"=rep(NA,n),"Sablefish_USD"=rep(NA,n),"Spiny_lobster_USD"=rep(NA,n),"Weighted mean LCOE"=rep(NA,n))
+  #   for(i in 1:n){ # Identifies species PV from a given weighted sample of size n drawn from agreement vector
+  #     fishroll[i,]<-dft[dft$`Wind farm grid ID`==s_agree[i],2:11]
+  #   }
+  #   LCOEMWh<-as.data.frame(mean(fishroll$Weighted.mean.LCOE)*1000)
+  #   fishroll$Weighted.mean.LCOE<-NULL
+  #   fishroll<-as.data.frame(t(colSums(fishroll))) #paste(s_agree, collapse = " ")
+  #   fishroll<-cbind(fishroll,LCOEMWh,paste(s_agree, collapse = " "))
+  #   names(fishroll)[names(fishroll) == 'paste(s_agree, collapse = " ")']<-"Sites"
+  #   names(fishroll)[names(fishroll) == 'mean(fishroll$Weighted.mean.LCOE) * 1000']<-"LCOEMWh"
+  #   bigfish[j,]<-fishroll
+  # }
+  # 
+  # LCOEMWh<-mean(bigfish$LCOEMWh)
+  # bigfish$LCOEMWh<-NULL
+  # bigfish<-bigfish %>% pivot_longer(cols = !Sites,names_to = "Fishery",values_to = "PV")
+  # bigfish$Fishery<-gsub("_USD$", "",bigfish$Fishery)
+  # bigfish$Fishery<-gsub("_", " ",bigfish$Fishery)
+  # bigfish$Fishery<-gsub("\\.", "-",bigfish$Fishery)
+  # 
+  # bigfish<-bigfish %>% group_by(Fishery) %>% 
+  #   summarise(meanfishPV = mean(PV))
+  
+  bigfish$n<-n
+  bigfish$`Mean PV`<-ifelse(bigfish$n==1,bigfish$`Mean PV`/9,bigfish$`Mean PV`) # Handles formatting issue with n == 1
+  bigfish$`Median PV`<-ifelse(bigfish$n==1,bigfish$`Median PV`/9,bigfish$`Median PV`) # Handles formatting issue with n == 1
+  bigfish$LCOEMWh<-LCOEMWh
+  bigfish$dupes<-dupes
+  
+  return(list(bigfish = bigfish,s_ids = s_ids,pareto_solutions = pareto_solutions))
+  #return(list(bigfish = bigfish))
+}
+
 ## Loading data
 df<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
 df<-df %>%
   dplyr::select(`Wind farm grid ID`,`Wind farm state`,`OWEP grid cells (n)`,Total_fish_USD,`Weighted mean LCOE`,`Total MWhyraw`,`Wind farm area (m2)`)
-
-#sapply(df, function(y) sum(length(which(is.na(y))))) # Lots of locations with fishing not suitable for wind presumably, lots of NAs for LCOE
 df<-df %>% drop_na(`Weighted mean LCOE`)
-#sum(df$Gridcell_area_m2)/1000000 # Total area over which to optimize version 2
-
 df<-df[df$`OWEP grid cells (n)`>34,] # Choosing 34 as a cutoff for what could be considered full cells, could amend
-#sum(df$`Wind farm area (m2)`)/1000000 # Total area over which to optimize version 4
-
 df$Total_fish_USD<-df$Total_fish_USD/1000000
 df$LCOE_MWh<-df$`Weighted mean LCOE`*1000
 df$`Weighted mean LCOE`<-NULL
@@ -40,162 +194,38 @@ df$`Wind farm area (m2)`<-NULL # This isn't a correct calculation, this is actua
 df<-as.data.frame(df)
 df2<-df
 
-## State targets. CA is 5GW by 2030 and 25GW by 2045, OR is 3GW by 2030. Could simulate WA at 3GW and 2045 by multiplying all by 5 (Region 63, CA 28, OR 17, WA 17)
-# Assuming 3MW per km2 and each cell is 8.185km2, CA is 1667km2 (204 cells) by 2030, OR is 1000km2 (122 cells) by 2030, and together is 2667km2 (326 cells). 
-# Assuming 3MW per km2 and each cell is 295km2 (36*8.185km2 cells), CA is 1667km2 (6 cells) by 2030, OR is 1000km2 (4 cells) by 2030, assuming WA is 1000km2 (4 cells) by 2030, and together is 3667km2 (13 cells) 
+## Targets: 
+# CA is 5GW by 2030 and 25GW by 2045, OR is 3GW by 2030. Could simulate WA at 3GW. and 
+# For 2030, assuming 3MW per km2 and each cell is 295km2 (36*8.185km2 cells): CA is 1667km2 (6 cells), OR is 1000km2 (4 cells), WA is 1000km2 (4 cells), and together is 3667km2 (13 cells)
+# For 2045, assuming a 5 times increase in GW targets: Region 63 cells, CA 28 cells, OR 17 cells, WA 17 cells
 
-## Non-dominated Sorting Genetic Algorithm II using binary based drawing and a repair function to set constraint (penalties and the constraint function don't seem to work)
+# Region
+df<-df2
+ns<-13
+pop<-1000
+system.time(biggerfish<-map2(ns,pop,replifish))
+ 
+pareto_solutions<-do.call(rbind, lapply(biggerfish, `[[`, 3))
+pareto_solutions_ordered<-pareto_solutions[order(pareto_solutions$`Sum fishing PV ($Mil)`), ] # Prep for plotting
+s_ids<-do.call(rbind, lapply(biggerfish, `[[`, 2))
 
-transform_vector_to_exact_ones <- function(v, num_ones) { # Sets constraint by forcing the NSGA2 draws to generate exactly n ones and (D - n) zeros
-  # Length of the input vector
-  n <- length(v)
-  
-  # Create a vector of zeros
-  transformed_v <- rep(0, n)
-  
-  # Find indices of the top num_ones values
-  top_indices <- order(v, decreasing = TRUE)[1:num_ones]
-  
-  # Set these positions to 1
-  transformed_v[top_indices] <- 1
-  
-  return(transformed_v)
-}
-
-# z<-runif(nrow(df),0,1) test vector
-
-main.goal1<-function(x){    # x - a vector of indicator variables
-  return(sum(transform_vector_to_exact_ones(x,num_ones = n)*df$Total_fish_USD))}
-
-main.goal2<-function(x){    # x - a vector of indicator variables
-  return(sum(transform_vector_to_exact_ones(x,num_ones = n)*df$LCOE_MWh*df$`Total MWhyraw`)/sum(transform_vector_to_exact_ones(x,num_ones = n)*df$`Total MWhyraw`))} # Weighted average of LCOE, weighted by energy production
-
-eval<-function(x){
-  return(c(main.goal1(x),main.goal2(x)))} # objective function
-
-# Region ---
-
-D<-as.numeric(nrow(df)) # Number of values in the function must equal D
-n<-13 # Number of cells
-
-system.time(G<-nsga2(fn=eval,
-                     idim=D, # Length of the subset of indices drawn by nsga2 through the eval fn
-                     odim=2, # Output dimensions
-                     lower.bounds=rep(0,nrow(df)),
-                     upper.bounds=rep(1,nrow(df)),
-                     popsize=500,generations=10000, cprob = 0.7, cdist = 5,
-                     mprob = 0.2, mdist = 10))
-
-#plot(G)
-
-# Identifying pareto sets after optimization
-pareto_indices <- which(G$pareto.optimal == TRUE)
-pareto_solutions <- cbind(as.data.frame(G$value),G$pareto.optimal)
-names(pareto_solutions) <- c("Sum fishing PV ($Mil)", "Mean LCOE ($/MWh)", "Pareto") # Rename columns
-pareto_solutions<-pareto_solutions[pareto_solutions$Pareto=="TRUE",]
-pareto_solutions$Pareto<-NULL
-pareto_solutions<-unique(pareto_solutions)
-
-transform_row_to_exact_ones <- function(row, num_ones) { # Same as vector version above, but for a matrix
-  n <- length(row)
-  transformed_row <- rep(0, n)
-  top_indices <- order(row, decreasing = TRUE)[1:num_ones]
-  transformed_row[top_indices] <- 1
-  return(transformed_row)
-}
-
-idim_par<-t(apply(G$par, 1, transform_row_to_exact_ones, num_ones = n))
-
-idim_par<-as.data.frame(idim_par[pareto_indices,])
-find_ones_positions <- function(row) {
-  return(which(row == 1))
-}
-selected_rows<-t(apply(idim_par,MARGIN = 1, find_ones_positions)) # Lists of selected rows from initial df for pareto sets
-selected_wfgridID<-as.data.frame(selected_rows) %>%
-  rowwise() %>%
-  mutate(across(everything(), ~df$`Wind farm grid ID`[.x])) %>%
-  ungroup()
-agree<-as.data.frame(table(as.matrix(selected_wfgridID)))
-agree$Var1<-as.numeric(levels(agree$Var1))[agree$Var1] # https://stackoverflow.com/questions/3418128/how-to-convert-a-factor-to-integer-numeric-without-loss-of-information
-agree$prob<-agree$Freq/sum(agree$Freq)
-
-# Fisheries exposure at pareto selected sites (sampling approach, sample n from agreement matrix weighted by how often they are selected and calculate an expected value)
-dft<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
-dft<-dft %>% dplyr::select(`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD)
-dft<-as.data.frame(dft)
-
-m<-1000
-bigfish<-data.frame("Dungeness_USD"=rep(NA,m),"At-sea_hake_USD"=rep(NA,m),"Shore_hake_USD"=rep(NA,m),"Market_squid_USD"=rep(NA,m),"Pink_shrimp_USD"=rep(NA,m),"Albacore_USD"=rep(NA,m),"Chinook_USD"=rep(NA,m),"Sablefish_USD"=rep(NA,m),"Spiny_lobster_USD"=rep(NA,m),"Sites"=rep(NA,m))
-for(j in 1:m){ # Sums species PV for a drawn sample of size n and iterates across samples while tracking draws in "Sites" column
-  s_agree<-sample(agree$Var1,n,replace = FALSE,prob = agree$prob)
-  fishroll<-data.frame("Dungeness_USD"=rep(NA,n),"At-sea_hake_USD"=rep(NA,n),"Shore_hake_USD"=rep(NA,n),"Market_squid_USD"=rep(NA,n),"Pink_shrimp_USD"=rep(NA,n),"Albacore_USD"=rep(NA,n),"Chinook_USD"=rep(NA,n),"Sablefish_USD"=rep(NA,n),"Spiny_lobster_USD"=rep(NA,n))
-  for(i in 1:n){ # Identifies species PV from a given weighted sample of size n drawn from agreement vector
-    fishroll[i,]<-dft[dft$`Wind farm grid ID`==s_agree[i],2:10]
-  }
-  fishroll<-as.data.frame(t(colSums(fishroll))) #paste(s_agree, collapse = " ")
-  fishroll<-cbind(fishroll,paste(s_agree, collapse = " "))
-  names(fishroll)[names(fishroll) == 'paste(s_agree, collapse = " ")']<-"Sites"
-  bigfish[j,]<-fishroll
-}
-
-bigfish<-bigfish %>% pivot_longer(cols = !Sites,names_to = "Fishery",values_to = "PV")
-bigfish$Fishery<-gsub("_USD$", "",bigfish$Fishery)
-bigfish$Fishery<-gsub("_", " ",bigfish$Fishery)
-bigfish$Fishery<-gsub("\\.", "-",bigfish$Fishery)
-
-sorted_fish<-bigfish %>% distinct(Fishery) %>% 
-  arrange(desc(`Fishery`)) %>% unlist()
-
-bigfish$Fishery<-factor(bigfish$Fishery, levels = sorted_fish)
-
-bigfish30<-ggplot() + 
-  geom_boxplot(data = bigfish, aes(y = Fishery, x = PV/1000000),outlier.shape = NA) +
-  #labs(x = "Sum fishing PV ($Mil)", y = "Mean LCOE ($/MWh)", color = "Fishery") +
-  labs(y="",x = "Fishing PV ($Mil)") +
-  coord_cartesian(xlim = c(0,7)) +
-  theme_minimal()
-
-fishsum<-dft %>% pivot_longer(cols = !`Wind farm grid ID`,names_to = "Fishery",values_to = "PV") %>% 
-  group_by(Fishery) %>% 
-  summarise(fishsum = sum(PV))
-
-fishsum$Fishery<-gsub("_USD$", "",fishsum$Fishery)
-fishsum$Fishery<-gsub("_", " ",fishsum$Fishery)
-fishsum$Fishery<-gsub("\\.", "-",fishsum$Fishery)
-
-bigfish<-merge(bigfish,fishsum,by="Fishery")
-bigfish$PVperc<-bigfish$PV/bigfish$fishsum
-
-bigfish30perc<-ggplot() + 
-  geom_boxplot(data = bigfish, aes(y = Fishery, x = PVperc*100),outlier.shape = NA) +
-  #labs(x = "Sum fishing PV ($Mil)", y = "Mean LCOE ($/MWh)", color = "Fishery") +
-  labs(y="",x = "Pecentage of total Fishing PV (%)") +
-  coord_cartesian(xlim = c(0,1)) +
-  theme_minimal()
-
-rm(bigfish,dft,agree,fishroll,idim_par,selected_wfgridID,selected_rows,i,j,m,pareto_indices,s_agree,sorted_fish,fishsum)
-
-# Testing if optimal at region scale
-llcoe<-df[order(df$LCOE_MWh)[1:n], ]
-sum(llcoe$Total_fish_USD)
-mean(llcoe$LCOE_MWh)
-
-llcoe_pt<-as.data.frame(cbind(sum(llcoe$Total_fish_USD),mean(llcoe$LCOE_MWh)))
-names(llcoe_pt) <- c("Sum fishing PV ($Mil)", "Mean LCOE ($/MWh)") # Rename columns
-
-lfpv<-df[order(df$Total_fish_USD)[1:n], ]
-sum(lfpv$Total_fish_USD)
-mean(lfpv$LCOE_MWh)
-
-lfpv_pt<-as.data.frame(cbind(sum(lfpv$Total_fish_USD),mean(lfpv$LCOE_MWh)))
-names(lfpv_pt) <- c("Sum fishing PV ($Mil)", "Mean LCOE ($/MWh)") # Rename columns
-
-# Plotting 
-pareto_solutions_ordered <- pareto_solutions[order(pareto_solutions$`Sum fishing PV ($Mil)`), ]
+s_ids<-s_ids %>% 
+  mutate(TotRev = rowSums(select(., ends_with("_USD")))) %>% # Adding up columns that end in "_USD" only - flexible to some columns not being present
+  group_by(id) %>% 
+  summarise(`Sum fishing PV ($Mil)` = sum(TotRev)/1000000, `Mean LCOE ($/MWh)` = sum(costofenergy)/sum(`Total MWhyraw`)*1000, GridId = paste(`Wind farm grid ID`, collapse = ", ")) %>% 
+  mutate(rank = rank(`Sum fishing PV ($Mil)`)) %>% 
+  filter(rank %in% c(round(length(rank)*.1),round(length(rank)*.5),round(length(rank)*.9))) %>%   # Keeping the 10th, 50th, and 90th percentile observations
+  mutate(lab = ifelse(`Sum fishing PV ($Mil)`==max(`Sum fishing PV ($Mil)`),"Wind",
+                      ifelse(`Sum fishing PV ($Mil)`==min(`Sum fishing PV ($Mil)`),"Fish","Balanced")))
+    
+s_idsR<-s_ids  
+pareto_solutionsR<-pareto_solutions
+biggerfishR<-do.call(rbind, lapply(biggerfish, `[[`, 1))
 
 region<-ggplot() +
-  #geom_point(data = pareto_solutions, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`, color = "Red"), size = 2) +
   geom_line(data = pareto_solutions_ordered, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`), color = "blue", linewidth = 1) +
+  geom_point(data = s_ids, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`), size = 5) +
+  geom_text(data = s_ids, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`, label = lab), hjust = -0.2, vjust = -.75) +
   #scale_color_manual(values = c("Pareto-optimal" = "red", "Dominated" = "gray")) +
   #geom_point(data = llcoe_pt, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`, color = "Black"), size = 2) +
   #geom_point(data = lfpv_pt, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`, color = "Green"), size = 2) +
@@ -206,96 +236,137 @@ region<-ggplot() +
 
 # CA ---
 df<-df2[df2$`Wind farm state`=="CA",]
-D<-as.numeric(nrow(df)) # Number of values in the function must equal D
-n<-6 # Number of cells
+ns<-6
+pop<-1000
+system.time(biggerfish<-map2(ns,pop,replifish))
 
-system.time(G<-nsga2(fn=eval,
-                     idim=D, # Length of the subset of indices drawn by nsga2 through the eval fn
-                     odim=2, # Output dimensions
-                     lower.bounds=rep(0,nrow(df)),
-                     upper.bounds=rep(1,nrow(df)),
-                     popsize=200,generations=10000, cprob = 0.7, cdist = 5,
-                     mprob = 0.2, mdist = 10))
+pareto_solutions<-do.call(rbind, lapply(biggerfish, `[[`, 3))
+pareto_solutions_ordered<-pareto_solutions[order(pareto_solutions$`Sum fishing PV ($Mil)`), ] # Prep for plotting
+s_ids<-do.call(rbind, lapply(biggerfish, `[[`, 2))
 
-# Plotting
-pareto_solutions <- cbind(as.data.frame(G$value),G$pareto.optimal)
-names(pareto_solutions) <- c("Sum fishing PV ($Mil)", "Mean LCOE ($/MWh)", "Pareto") # Rename columns
-pareto_solutions<-pareto_solutions[pareto_solutions$Pareto=="TRUE",]
-pareto_solutions_ordered <- pareto_solutions[order(pareto_solutions$`Sum fishing PV ($Mil)`), ]
+s_ids<-s_ids %>% 
+  mutate(TotRev = rowSums(select(., ends_with("_USD")))) %>% # Adding up columns that end in "_USD" only - flexible to some columns not being present
+  group_by(id) %>% 
+  summarise(`Sum fishing PV ($Mil)` = sum(TotRev)/1000000, `Mean LCOE ($/MWh)` = sum(costofenergy)/sum(`Total MWhyraw`)*1000, GridId = paste(`Wind farm grid ID`, collapse = ", ")) %>% 
+  mutate(rank = rank(`Sum fishing PV ($Mil)`)) %>% 
+  filter(rank %in% c(round(length(rank)*.1),round(length(rank)*.5),round(length(rank)*.9))) %>%   # Keeping the 10th, 50th, and 90th percentile observations
+  mutate(lab = ifelse(`Sum fishing PV ($Mil)`==max(`Sum fishing PV ($Mil)`),"Wind",
+                      ifelse(`Sum fishing PV ($Mil)`==min(`Sum fishing PV ($Mil)`),"Fish","Balanced")))
+
+s_idsCA<-s_ids  
+pareto_solutionsCA<-pareto_solutions
+biggerfishCA<-do.call(rbind, lapply(biggerfish, `[[`, 1))
 
 CA<-ggplot() +
-  #geom_point(data = pareto_solutions, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`, color = "Red"), size = 2) +
   geom_line(data = pareto_solutions_ordered, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`), color = "blue", linewidth = 1) +
-  #scale_color_manual(values = c("Pareto-optimal" = "red", "Dominated" = "gray")) +
-  #geom_point(data = llcoe_pt, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`, color = "Black"), size = 2) +
-  #geom_point(data = lfpv_pt, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`, color = "Green"), size = 2) +
+  geom_point(data = s_ids, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`), size = 5) +
+  geom_text(data = s_ids, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`, label = lab), hjust = -0.2, vjust = -.75) +
   theme_minimal() +
-  #labs(x = "Sum fishing PV ($Mil)", y = "Mean LCOE ($/MWh)") +
   theme(legend.title = element_blank(),legend.position="none") +
-  coord_cartesian(xlim = c(0, 15))
+  coord_cartesian(xlim = c(0, 8))
 
 # OR ---
 df<-df2[df2$`Wind farm state`=="OR",]
-D<-as.numeric(nrow(df)) # Number of values in the function must equal D
-n<-4 # Number of cells
+ns<-4
+pop<-1000
+system.time(biggerfish<-map2(ns,pop,replifish))
 
-system.time(G<-nsga2(fn=eval,
-                     idim=D, # Length of the subset of indices drawn by nsga2 through the eval fn
-                     odim=2, # Output dimensions
-                     lower.bounds=rep(0,nrow(df)),
-                     upper.bounds=rep(1,nrow(df)),
-                     popsize=200,generations=10000, cprob = 0.7, cdist = 5,
-                     mprob = 0.2, mdist = 10))
+pareto_solutions<-do.call(rbind, lapply(biggerfish, `[[`, 3))
+pareto_solutions_ordered<-pareto_solutions[order(pareto_solutions$`Sum fishing PV ($Mil)`), ] # Prep for plotting
+s_ids<-do.call(rbind, lapply(biggerfish, `[[`, 2))
 
-# Plotting
-pareto_solutions <- cbind(as.data.frame(G$value),G$pareto.optimal)
-names(pareto_solutions) <- c("Sum fishing PV ($Mil)", "Mean LCOE ($/MWh)", "Pareto") # Rename columns
-pareto_solutions<-pareto_solutions[pareto_solutions$Pareto=="TRUE",]
-pareto_solutions_ordered <- pareto_solutions[order(pareto_solutions$`Sum fishing PV ($Mil)`), ]
+s_ids<-s_ids %>% 
+  mutate(TotRev = rowSums(select(., ends_with("_USD")))) %>% # Adding up columns that end in "_USD" only - flexible to some columns not being present
+  group_by(id) %>% 
+  summarise(`Sum fishing PV ($Mil)` = sum(TotRev)/1000000, `Mean LCOE ($/MWh)` = sum(costofenergy)/sum(`Total MWhyraw`)*1000, GridId = paste(`Wind farm grid ID`, collapse = ", ")) %>% 
+  mutate(rank = rank(`Sum fishing PV ($Mil)`)) %>% 
+  filter(rank %in% c(round(length(rank)*.1),round(length(rank)*.5),round(length(rank)*.9))) %>%   # Keeping the 10th, 50th, and 90th percentile observations
+  mutate(lab = ifelse(`Sum fishing PV ($Mil)`==max(`Sum fishing PV ($Mil)`),"Wind",
+                      ifelse(`Sum fishing PV ($Mil)`==min(`Sum fishing PV ($Mil)`),"Fish","Balanced")))
+
+s_idsOR<-s_ids  
+pareto_solutionsOR<-pareto_solutions
+biggerfishOR<-do.call(rbind, lapply(biggerfish, `[[`, 1))
 
 OR<-ggplot() +
-  #geom_point(data = pareto_solutions, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`, color = "Red"), size = 2) +
   geom_line(data = pareto_solutions_ordered, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`), color = "blue", linewidth = 1) +
-  #scale_color_manual(values = c("Pareto-optimal" = "red", "Dominated" = "gray")) +
-  #geom_point(data = llcoe_pt, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`, color = "Black"), size = 2) +
-  #geom_point(data = lfpv_pt, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`, color = "Green"), size = 2) +
+  geom_point(data = s_ids, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`), size = 5) +
+  geom_text(data = s_ids, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`, label = lab), hjust = -0.2, vjust = -.75) +
   theme_minimal() +
-  #labs(x = "Sum fishing PV ($Mil)", y = "Mean LCOE ($/MWh)") +
   theme(legend.title = element_blank(),legend.position="none")
 
 # WA ---
 df<-df2[df2$`Wind farm state`=="WA",]
-D<-as.numeric(nrow(df)) # Number of values in the function must equal D
-n<-4 # Number of cells
+ns<-4
+pop<-1000
+system.time(biggerfish<-map2(ns,pop,replifish))
 
-system.time(G<-nsga2(fn=eval,
-                     idim=D, # Length of the subset of indices drawn by nsga2 through the eval fn
-                     odim=2, # Output dimensions
-                     lower.bounds=rep(0,nrow(df)),
-                     upper.bounds=rep(1,nrow(df)),
-                     popsize=200,generations=10000, cprob = 0.7, cdist = 5,
-                     mprob = 0.2, mdist = 10))
+pareto_solutions<-do.call(rbind, lapply(biggerfish, `[[`, 3))
+pareto_solutions_ordered<-pareto_solutions[order(pareto_solutions$`Sum fishing PV ($Mil)`), ] # Prep for plotting
+s_ids<-do.call(rbind, lapply(biggerfish, `[[`, 2))
 
-# Plotting
-pareto_solutions <- cbind(as.data.frame(G$value),G$pareto.optimal)
-names(pareto_solutions) <- c("Sum fishing PV ($Mil)", "Mean LCOE ($/MWh)", "Pareto") # Rename columns
-pareto_solutions<-pareto_solutions[pareto_solutions$Pareto=="TRUE",]
-pareto_solutions_ordered <- pareto_solutions[order(pareto_solutions$`Sum fishing PV ($Mil)`), ]
+s_ids<-s_ids %>% 
+  mutate(TotRev = rowSums(select(., ends_with("_USD")))) %>% # Adding up columns that end in "_USD" only - flexible to some columns not being present
+  group_by(id) %>% 
+  summarise(`Sum fishing PV ($Mil)` = sum(TotRev)/1000000, `Mean LCOE ($/MWh)` = sum(costofenergy)/sum(`Total MWhyraw`)*1000, GridId = paste(`Wind farm grid ID`, collapse = ", ")) %>% 
+  mutate(rank = rank(`Sum fishing PV ($Mil)`)) %>% 
+  filter(rank %in% c(round(length(rank)*.1),round(length(rank)*.5),round(length(rank)*.9))) %>%   # Keeping the 10th, 50th, and 90th percentile observations
+  mutate(lab = ifelse(`Sum fishing PV ($Mil)`==max(`Sum fishing PV ($Mil)`),"Wind",
+                      ifelse(`Sum fishing PV ($Mil)`==min(`Sum fishing PV ($Mil)`),"Fish","Balanced")))
+
+s_idsWA<-s_ids  
+pareto_solutionsWA<-pareto_solutions
+biggerfishWA<-do.call(rbind, lapply(biggerfish, `[[`, 1))
 
 WA<-ggplot() +
-  #geom_point(data = pareto_solutions, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`, color = "Red"), size = 2) +
   geom_line(data = pareto_solutions_ordered, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`), color = "blue", linewidth = 1) +
-  #scale_color_manual(values = c("Pareto-optimal" = "red", "Dominated" = "gray")) +
-  #geom_point(data = llcoe_pt, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`, color = "Black"), size = 2) +
-  #geom_point(data = lfpv_pt, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`, color = "Green"), size = 2) +
+  geom_point(data = s_ids, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`), size = 5) +
+  geom_text(data = s_ids, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`, label = lab), hjust = -0.2, vjust = -.75) +
   theme_minimal() +
-  #labs(x = "Sum fishing PV ($Mil)", y = "Mean LCOE ($/MWh)") +
   theme(legend.title = element_blank(),legend.position="none")
 
 # Region 2045 ---
 df<-df2
+ns<-63
+pop<-1000
+system.time(biggerfish<-map2(ns,pop,replifish))
+
+pareto_solutions<-do.call(rbind, lapply(biggerfish, `[[`, 3))
+pareto_solutions_ordered<-pareto_solutions[order(pareto_solutions$`Sum fishing PV ($Mil)`), ] # Prep for plotting
+s_ids<-do.call(rbind, lapply(biggerfish, `[[`, 2))
+
+s_ids<-s_ids %>% 
+  mutate(TotRev = rowSums(select(., ends_with("_USD")))) %>% # Adding up columns that end in "_USD" only - flexible to some columns not being present
+  group_by(id) %>% 
+  summarise(`Sum fishing PV ($Mil)` = sum(TotRev)/1000000, `Mean LCOE ($/MWh)` = sum(costofenergy)/sum(`Total MWhyraw`)*1000, GridId = paste(`Wind farm grid ID`, collapse = ", ")) %>% 
+  mutate(rank = rank(`Sum fishing PV ($Mil)`)) %>% 
+  filter(rank %in% c(round(length(rank)*.1),round(length(rank)*.5),round(length(rank)*.9))) %>%   # Keeping the 10th, 50th, and 90th percentile observations
+  mutate(lab = ifelse(`Sum fishing PV ($Mil)`==max(`Sum fishing PV ($Mil)`),"Wind",
+                      ifelse(`Sum fishing PV ($Mil)`==min(`Sum fishing PV ($Mil)`),"Fish","Balanced")))
+
+s_idsR45<-s_ids  
+pareto_solutionsR45<-pareto_solutions
+biggerfishR45<-do.call(rbind, lapply(biggerfish, `[[`, 1))
+
+region45<-ggplot() +
+  geom_line(data = pareto_solutions_ordered, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`), color = "blue", linewidth = 1) +
+  geom_point(data = s_ids, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`), size = 5) +
+  geom_text(data = s_ids, aes(x = `Sum fishing PV ($Mil)`, y = `Mean LCOE ($/MWh)`, label = lab), hjust = -0.2, vjust = -.75) +
+  theme_minimal() +
+  theme(legend.title = element_blank(),legend.position="none")  
+  
+
+#### Make sure above works before proceeding, compare to below
+
+
+  
+  
+
+
 D<-as.numeric(nrow(df)) # Number of values in the function must equal D
 n<-63 # Number of cells
+
+
 
 system.time(G<-nsga2(fn=eval,
                      idim=D, # Length of the subset of indices drawn by nsga2 through the eval fn
@@ -582,162 +653,14 @@ df$`Weighted mean LCOE`<-NULL
 df$`Wind farm area (m2)`<-NULL # This isn't a correct calculation, this is actually cell size
 df<-as.data.frame(df)
 
-replifish<-function(n,pops){
-  transform_vector_to_exact_ones <- function(v, num_ones) { # Sets constraint by forcing the NSGA2 draws to generate exactly n ones and (D - n) zeros
-    # Length of the input vector
-    l <- length(v)
-    
-    # Create a vector of zeros
-    transformed_v <- rep(0, l)
-    
-    # Find indices of the top num_ones values
-    top_indices <- order(v, decreasing = TRUE)[1:num_ones]
-    
-    # Set these positions to 1
-    transformed_v[top_indices] <- 1
-    
-    return(transformed_v)
-  }
-  
-  # z<-runif(nrow(df),0,1) test vector
-  
-  main.goal1<-function(x){    # x - a vector of indicator variables
-    return(sum(transform_vector_to_exact_ones(x,num_ones = n)*df$Total_fish_USD))}
-  
-  main.goal2<-function(x){    # x - a vector of indicator variables
-    return(sum(transform_vector_to_exact_ones(x,num_ones = n)*df$LCOE_MWh*df$`Total MWhyraw`)/sum(transform_vector_to_exact_ones(x,num_ones = n)*df$`Total MWhyraw`))} # Weighted average of LCOE, weighted by energy production
-  
-  eval<-function(x){
-    return(c(main.goal1(x),main.goal2(x)))} # objective function
-  
-  D<-as.numeric(nrow(df)) # Number of values in the function must equal D
-  #n<-63 # Number of cells
-  
-  system.time(G<-nsga2(fn=eval,
-                       idim=D, # Length of the subset of indices drawn by nsga2 through the eval fn
-                       odim=2, # Output dimensions
-                       lower.bounds=rep(0,nrow(df)),
-                       upper.bounds=rep(1,nrow(df)),
-                       popsize=pops,generations=10000, cprob = 0.7, cdist = 5,
-                       mprob = 0.2, mdist = 10))
-  
-  # Identifying pareto sets after optimization
-  #pareto_indices <-unique(as.data.frame(cbind(G$value,as.character(G$pareto.optimal))))
-  pareto_indices <- which(G$pareto.optimal == TRUE)
-  
-  transform_row_to_exact_ones <- function(row, num_ones) { # Same as vector version above, but for a matrix
-    l <- length(row)
-    transformed_row <- rep(0, l)
-    top_indices <- order(row, decreasing = TRUE)[1:num_ones]
-    transformed_row[top_indices] <- 1
-    return(transformed_row)
-  }
-  
-  idim_par<-t(apply(G$par, 1, transform_row_to_exact_ones, num_ones = n))
-  
-  idim_par<-as.data.frame(idim_par[pareto_indices,])
-  find_ones_positions <- function(row) {
-    return(which(row == 1))
-  }
-  selected_rows<-t(apply(idim_par,MARGIN = 1, find_ones_positions)) # Lists of selected rows from initial df for pareto sets
-  dupes<-as.numeric(nrow(selected_rows)-nrow(unique(selected_rows)))
-  selected_rows<-unique(selected_rows) # NSGA2 can produce duplicate pareto sets
-  selected_wfgridID<-as.data.frame(selected_rows) %>%
-    rowwise() %>%
-    mutate(across(everything(), ~df$`Wind farm grid ID`[.x])) %>%
-    ungroup()
-  # agree<-as.data.frame(table(as.matrix(selected_wfgridID)))
-  # agree$Var1<-as.numeric(levels(agree$Var1))[agree$Var1] # https://stackoverflow.com/questions/3418128/how-to-convert-a-factor-to-integer-numeric-without-loss-of-information
-  # agree$prob<-agree$Freq/sum(agree$Freq)
-  # agree$n<-n
-  # agree<-mutate(agree, LCOEMWh = df$LCOE_MWh[match(agree$Var1,df$`Wind farm grid ID`)])
-  # agree<-mutate(agree, FishPV = df$Total_fish_USD[match(agree$Var1,df$`Wind farm grid ID`)])
-  selected_wfgridID$id<-seq(1,nrow(selected_wfgridID),1) # Adds unique id for each pareto point
-  selected_wfgridID<-pivot_longer(data = selected_wfgridID,cols = !id,values_to = "Wind farm grid ID") %>% dplyr::select(!name) # Long format
-  
-  # Merging fisheries data to pareto points
-  dft<-read_csv("OWEP output & fishing PV data V5 DO NOT DISTRIBUTE.csv")
-  dft<-dft %>% dplyr::select(`Wind farm grid ID`,Dungeness_USD,`At-sea_hake_USD`,Shore_hake_USD,Market_squid_USD,Pink_shrimp_USD,Albacore_USD,Chinook_USD,Sablefish_USD,Spiny_lobster_USD,`Weighted mean LCOE`)
-  dft<-as.data.frame(dft)
-  
-  selected_wfgridID<-merge(selected_wfgridID,dft,by="Wind farm grid ID") # Merge
-  selected_wfgridID<-unique(selected_wfgridID) # Issue with the duplicate pareto sets command above when n = 1, this catches it
-  LCOEMWh<-mean(selected_wfgridID$`Weighted mean LCOE`)*1000 # Mean LCOE for the development scenario
-  selected_wfgridID$`Weighted mean LCOE`<-NULL
-  selected_wfgridID<-selected_wfgridID %>% dplyr::select(!"Wind farm grid ID") %>% group_by(id) %>% # Sums exposure per species for a given pareto set 
-    summarise(across(everything(), list(sum),.names = "sum_{.col}"))
-  selected_wfgridIDmn<-selected_wfgridID %>% dplyr::select(!id) %>% # Mean exposure per species for all pareto sets
-    summarise(across(everything(), list(mean),.names = "mean_{.col}")) 
-  selected_wfgridIDmd<-selected_wfgridID %>% dplyr::select(!id) %>% # Median exposure per species for all pareto sets
-    summarise(across(everything(), list(median),.names = "median_{.col}")) 
-
-  # Function to calculate confidence interval using t.test
-  calculate_ci <- function(column) {
-    t_result <- t.test(column)
-    lower <- t_result$conf.int[1]
-    upper <- t_result$conf.int[2]
-    
-    # Check for NaN and replace with mean for when there is only a single value in the entire sample
-    if (is.nan(lower)) lower <- as.numeric(t_result$estimate)
-    if (is.nan(upper)) upper <- as.numeric(t_result$estimate)
-    
-    return(c(lower, upper))
-  }
-  ci_df<-as.data.frame(t(sapply(selected_wfgridID[, setdiff(names(selected_wfgridID), "id")], calculate_ci)))
-  colnames(ci_df)<-c("Lower", "Upper")
-  ci_df$Fishery<-rownames(ci_df)
-  ci_df$Fishery<-gsub("sum_", "",ci_df$Fishery)
-
-  bigfishmn<-selected_wfgridIDmn %>% pivot_longer(cols = everything(),names_to = "Fishery",values_to = "Mean PV", names_prefix = "mean_sum_")
-  bigfishmd<-selected_wfgridIDmd %>% pivot_longer(cols = everything(),names_to = "Fishery",values_to = "Median PV", names_prefix = "median_sum_")
-  bigfish<-merge(bigfishmn,bigfishmd, by = "Fishery")
-  bigfish<-merge(bigfish,ci_df,by="Fishery")
-  
-  # m<-15000 # Highest value for expected values of n
-  # bigfish<-data.frame("Dungeness_USD"=rep(NA,m),"At-sea_hake_USD"=rep(NA,m),"Shore_hake_USD"=rep(NA,m),"Market_squid_USD"=rep(NA,m),"Pink_shrimp_USD"=rep(NA,m),"Albacore_USD"=rep(NA,m),"Chinook_USD"=rep(NA,m),"Sablefish_USD"=rep(NA,m),"Spiny_lobster_USD"=rep(NA,m),"LCOEMWh"=rep(NA,m),"Sites"=rep(NA,m))
-  # for(j in 1:m){ # Sums species PV for a drawn sample of size n and iterates across samples while tracking draws in "Sites" column
-  #   s_agree<-sample(agree$Var1,n,replace = FALSE,prob = agree$prob)
-  #   fishroll<-data.frame("Dungeness_USD"=rep(NA,n),"At-sea_hake_USD"=rep(NA,n),"Shore_hake_USD"=rep(NA,n),"Market_squid_USD"=rep(NA,n),"Pink_shrimp_USD"=rep(NA,n),"Albacore_USD"=rep(NA,n),"Chinook_USD"=rep(NA,n),"Sablefish_USD"=rep(NA,n),"Spiny_lobster_USD"=rep(NA,n),"Weighted mean LCOE"=rep(NA,n))
-  #   for(i in 1:n){ # Identifies species PV from a given weighted sample of size n drawn from agreement vector
-  #     fishroll[i,]<-dft[dft$`Wind farm grid ID`==s_agree[i],2:11]
-  #   }
-  #   LCOEMWh<-as.data.frame(mean(fishroll$Weighted.mean.LCOE)*1000)
-  #   fishroll$Weighted.mean.LCOE<-NULL
-  #   fishroll<-as.data.frame(t(colSums(fishroll))) #paste(s_agree, collapse = " ")
-  #   fishroll<-cbind(fishroll,LCOEMWh,paste(s_agree, collapse = " "))
-  #   names(fishroll)[names(fishroll) == 'paste(s_agree, collapse = " ")']<-"Sites"
-  #   names(fishroll)[names(fishroll) == 'mean(fishroll$Weighted.mean.LCOE) * 1000']<-"LCOEMWh"
-  #   bigfish[j,]<-fishroll
-  # }
-  # 
-  # LCOEMWh<-mean(bigfish$LCOEMWh)
-  # bigfish$LCOEMWh<-NULL
-  # bigfish<-bigfish %>% pivot_longer(cols = !Sites,names_to = "Fishery",values_to = "PV")
-  # bigfish$Fishery<-gsub("_USD$", "",bigfish$Fishery)
-  # bigfish$Fishery<-gsub("_", " ",bigfish$Fishery)
-  # bigfish$Fishery<-gsub("\\.", "-",bigfish$Fishery)
-  # 
-  # bigfish<-bigfish %>% group_by(Fishery) %>% 
-  #   summarise(meanfishPV = mean(PV))
-  
-  bigfish$n<-n
-  bigfish$`Mean PV`<-ifelse(bigfish$n==1,bigfish$`Mean PV`/9,bigfish$`Mean PV`) # Handles formatting issue with n == 1
-  bigfish$`Median PV`<-ifelse(bigfish$n==1,bigfish$`Median PV`/9,bigfish$`Median PV`) # Handles formatting issue with n == 1
-  bigfish$LCOEMWh<-LCOEMWh
-  bigfish$dupes<-dupes
-  
-  #return(list(bigfish = bigfish,agree = agree))
-  return(list(bigfish = bigfish))
-}
-
 ns<-c(seq(2,62,10))
 pop<-rep(1000,length(ns))
 
-system.time(biggerfish<-map2_dfr(ns,pop,replifish))
-# system.time(biggerfish<-map2(ns,pop,replifish))
-# cagree<-map(biggerfish, pluck, "agree") %>% bind_rows()
-# biggerfish<-map(biggerfish, pluck, "bigfish") %>% bind_rows()
-biggerfish<-biggerfish$bigfish # Extracts the results of map to a dataframe from a list (not sure why map2_dfr is creating a list)
+#system.time(biggerfish<-map2_dfr(ns,pop,replifish)) # Use if the replifish function returns a single dataframe
+system.time(biggerfish<-map2(ns,pop,replifish)) # Use if the replifish function returns a list
+
+s_idsR<-do.call(rbind, lapply(biggerfish, `[[`, 2))
+biggerfish<-do.call(rbind, lapply(biggerfish, `[[`, 1))
 
 # biggerfish %>% group_by(n) %>% 
 #   summarise(SumMean = sum(`Mean PV`), SumMedian = sum(`Median PV`), MeanLCOE = mean(LCOEMWh)) %>% 
@@ -864,11 +787,11 @@ df<-df %>% filter(`Wind farm state`=="CA")
 ns<-c(seq(5,30,5))
 pop<-rep(1000,length(ns))
 
-system.time(biggerfish<-map2_dfr(ns,pop,replifish))
-# system.time(biggerfish<-map2(ns,pop,replifish))
-# cagree<-map(biggerfish, pluck, "agree") %>% bind_rows()
-# biggerfish<-map(biggerfish, pluck, "bigfish") %>% bind_rows()
-biggerfish<-biggerfish$bigfish
+#system.time(biggerfish<-map2_dfr(ns,pop,replifish)) # Use if the replifish function returns a single dataframe
+system.time(biggerfish<-map2(ns,pop,replifish)) # Use if the replifish function returns a list
+
+s_idsCA<-do.call(rbind, lapply(biggerfish, `[[`, 2))
+biggerfish<-do.call(rbind, lapply(biggerfish, `[[`, 1))
 
 biggerfish %>% group_by(n) %>% 
   summarise(SumMean = sum(`Mean PV`), SumMedian = sum(`Median PV`), MeanLCOE = mean(LCOEMWh)) %>%
@@ -997,11 +920,11 @@ df<-df %>% filter(`Wind farm state`=="OR")
 ns<-c(seq(3,18,3))
 pop<-rep(1000,length(ns))
 
-system.time(biggerfish<-map2_dfr(ns,pop,replifish))
-# system.time(biggerfish<-map2(ns,pop,replifish))
-# cagree<-map(biggerfish, pluck, "agree") %>% bind_rows()
-# biggerfish<-map(biggerfish, pluck, "bigfish") %>% bind_rows()
-biggerfish<-biggerfish$bigfish
+#system.time(biggerfish<-map2_dfr(ns,pop,replifish)) # Use if the replifish function returns a single dataframe
+system.time(biggerfish<-map2(ns,pop,replifish)) # Use if the replifish function returns a list
+
+s_idsOR<-do.call(rbind, lapply(biggerfish, `[[`, 2))
+biggerfish<-do.call(rbind, lapply(biggerfish, `[[`, 1))
 
 biggerfish %>% group_by(n) %>% 
   summarise(SumMean = sum(`Mean PV`), SumMedian = sum(`Median PV`), MeanLCOE = mean(LCOEMWh)) %>% 
@@ -1130,11 +1053,11 @@ df<-df %>% filter(`Wind farm state`=="WA")
 ns<-c(seq(3,18,3))
 pop<-rep(1000,length(ns))
 
-system.time(biggerfish<-map2_dfr(ns,pop,replifish))
-# system.time(biggerfish<-map2(ns,pop,replifish))
-# cagree<-map(biggerfish, pluck, "agree") %>% bind_rows()
-# biggerfish<-map(biggerfish, pluck, "bigfish") %>% bind_rows()
-biggerfish<-biggerfish$bigfish
+#system.time(biggerfish<-map2_dfr(ns,pop,replifish)) # Use if the replifish function returns a single dataframe
+system.time(biggerfish<-map2(ns,pop,replifish)) # Use if the replifish function returns a list
+
+s_idsWA<-do.call(rbind, lapply(biggerfish, `[[`, 2))
+biggerfish<-do.call(rbind, lapply(biggerfish, `[[`, 1))
 
 biggerfish %>% group_by(n) %>% 
   summarise(SumMean = sum(`Mean PV`), SumMedian = sum(`Median PV`), MeanLCOE = mean(LCOEMWh)) %>% 
