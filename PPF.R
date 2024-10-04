@@ -538,7 +538,10 @@ s_idsR45$target<-2045
 s_ids<-rbind(s_idsCA,s_idsCA45,s_idsOR,s_idsOR45,s_idsR,s_idsR45,s_idsWA,s_idsWA45)
 s_ids$id<-NULL
 
-#write.csv(s_ids,"Pareto_mapping_ids.csv")
+s_ids<-s_ids %>% separate_rows(GridId, sep = ",") # Long format
+s_ids$GridId<-as.numeric(s_ids$GridId)
+
+write.csv(s_ids,"Pareto_mapping_ids.csv")
 
 
 # Fisheries exposure replicated across many targets -----------------------
