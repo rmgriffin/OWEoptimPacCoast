@@ -494,10 +494,10 @@ region<-region + labs(x="Sum fishing present value exposure ($ Mil)", title = "R
 region45<-region45 + labs(x="Sum fishing present value exposure ($ Mil)", title = "Region 2045") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot")
 CA<-CA + labs(x="Sum fishing present value exposure ($ Mil)", title = "CA 2030") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot") + coord_cartesian(xlim = c(0, 8))
 CA45<-CA45 + labs(x="Sum fishing present value exposure ($ Mil)", title = "CA 2045") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot")
-WA<-WA + labs(x="Sum fishing present value exposure ($ Mil)", title = "OR 2030") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot") + coord_cartesian(xlim = c(0, 350))
-WA45<-WA45 + labs(x="Sum fishing present value exposure ($ Mil)", title = "OR 2045") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot")
-OR<-OR + labs(x="Sum fishing present value exposure ($ Mil)", title = "WA 2030") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot")
-OR45<-OR45 + labs(x="Sum fishing present value exposure ($ Mil)", title = "WA 2045") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot")
+WA<-WA + labs(x="Sum fishing present value exposure ($ Mil)", title = "WA 2030") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot") + coord_cartesian(xlim = c(0, 350))
+WA45<-WA45 + labs(x="Sum fishing present value exposure ($ Mil)", title = "WA 2045") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot")
+OR<-OR + labs(x="Sum fishing present value exposure ($ Mil)", title = "OR 2030") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot")
+OR45<-OR45 + labs(x="Sum fishing present value exposure ($ Mil)", title = "OR 2045") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot")
 
 #region + region + region45 + CA45 + OR45 + WA45 + plot_annotation(tag_levels = 'A') + plot_layout(axis_titles = "collect")
 #region + region45 + CA45 + OR45 + WA45 + plot_annotation(tag_levels = 'A') + plot_layout(axis_titles = "collect")
@@ -509,7 +509,7 @@ OR45<-OR45 + labs(x="Sum fishing present value exposure ($ Mil)", title = "WA 20
 # 
 # region45 + CA45 + OR45 + WA45 + plot_annotation(tag_levels = 'A') + plot_layout(axis_titles = "collect") # Old supplement figure
 
-region + region45 + CA + CA45 + OR + OR45 + WA + WA45 + plot_annotation(tag_levels = 'A') + plot_layout(axis_titles = "collect", ncol = 2) # New figure 4 that combines old main and supplement figures and adds points for mapping
+region + region45 + WA + WA45 + OR + OR45 + CA + CA45 + plot_annotation(tag_levels = 'A') + plot_layout(axis_titles = "collect", ncol = 2) # 1000*1800 New figure 4 that combines old main and supplement figures and adds points for mapping
 
 #region + region + region45 + CA + OR + WA + plot_annotation(tag_levels = 'A') + plot_layout(axis_titles = "collect")
 #(region + region45) / (CA + OR + WA) + plot_annotation(tag_levels = 'A') + plot_layout(axis_titles = "collect")
