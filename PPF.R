@@ -19,6 +19,9 @@ for (p in PKG) {
 }
 rm(p,PKG)
 
+renv::snapshot()
+#renv::update()
+
 options(scipen=999) # Prevent scientific notation
 
 
@@ -490,14 +493,14 @@ WA45<-ggplot() +
 # Grouping PPF plots
 #region + CA + OR + WA
 
-region<-region + labs(x="Sum fishing present value exposure ($ Mil)", title = "Region 2030") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot") # Relabeling x axis
-region45<-region45 + labs(x="Sum fishing present value exposure ($ Mil)", title = "Region 2045") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot")
-CA<-CA + labs(x="Sum fishing present value exposure ($ Mil)", title = "CA 2030") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot") + coord_cartesian(xlim = c(0, 8))
-CA45<-CA45 + labs(x="Sum fishing present value exposure ($ Mil)", title = "CA 2045") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot")
-WA<-WA + labs(x="Sum fishing present value exposure ($ Mil)", title = "WA 2030") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot") + coord_cartesian(xlim = c(0, 350))
-WA45<-WA45 + labs(x="Sum fishing present value exposure ($ Mil)", title = "WA 2045") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot")
-OR<-OR + labs(x="Sum fishing present value exposure ($ Mil)", title = "OR 2030") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot")
-OR45<-OR45 + labs(x="Sum fishing present value exposure ($ Mil)", title = "OR 2045") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot")
+region<-region + theme(axis.text = element_text(size = 18), axis.title=element_text(size=18)) + labs(x="Sum fishing present value exposure ($ Mil)", title = "Region 2030") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot") # Relabeling x axis
+region45<-region45 + theme_minimal() + theme(axis.text = element_text(size = 18), axis.title=element_text(size=18)) + labs(x="Sum fishing present value exposure ($ Mil)", title = "Region 2045") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot")
+CA<-CA + theme(axis.text = element_text(size = 18), axis.title=element_text(size=18)) + labs(x="Sum fishing present value exposure ($ Mil)", title = "CA 2030") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot") + coord_cartesian(xlim = c(0, 8))
+CA45<-CA45 + theme(axis.text = element_text(size = 18), axis.title=element_text(size=18)) + labs(x="Sum fishing present value exposure ($ Mil)", title = "CA 2045") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot")
+WA<-WA + theme(axis.text = element_text(size = 18), axis.title=element_text(size=18)) + labs(x="Sum fishing present value exposure ($ Mil)", title = "WA 2030") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot") + coord_cartesian(xlim = c(0, 350))
+WA45<-WA45 + theme(axis.text = element_text(size = 18), axis.title=element_text(size=18)) + labs(x="Sum fishing present value exposure ($ Mil)", title = "WA 2045") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot")
+OR<-OR + theme(axis.text = element_text(size = 18), axis.title=element_text(size=18)) + labs(x="Sum fishing present value exposure ($ Mil)", title = "OR 2030") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot")
+OR45<-OR45 + theme(axis.text = element_text(size = 18), axis.title=element_text(size=18)) + labs(x="Sum fishing present value exposure ($ Mil)", title = "OR 2045") + theme(plot.title = element_text(hjust = 0.5,vjust = -1.5), plot.title.position = "plot")
 
 #region + region + region45 + CA45 + OR45 + WA45 + plot_annotation(tag_levels = 'A') + plot_layout(axis_titles = "collect")
 #region + region45 + CA45 + OR45 + WA45 + plot_annotation(tag_levels = 'A') + plot_layout(axis_titles = "collect")
